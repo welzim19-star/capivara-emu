@@ -1,0 +1,6 @@
+Starting a Gradle Daemon, 3 busy and 2 incompatible and 1 stopped Daemons could not be reused, use --status for details
+
+> Configure project :app
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+
+[Incubating] Problems report is available at: file:///home/kali/Desktop/capivara-emu/android/build/reports/problems/problems-report.html

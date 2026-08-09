@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Capivara Emu</string>
+    <string name="title_activity_main">Capivara Emu</string>
+    <string name="package_name">com.capivaraemu.studio</string>
+    <string name="custom_url_scheme">com.capivaraemu.studio</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "Capivara Emu Studio",
+  "description": "All-in-One Android Emulator Hub, SAF Tenant Storage Isolation, Vulkan Shader Simulator & Anti-Gravity IDE Code Exporter",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
