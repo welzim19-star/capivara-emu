@@ -9,6 +9,8 @@ ANativeWindow*               g_window        = nullptr;
 void*                        g_core_handle   = nullptr;
 std::atomic<bool>            g_engineRunning(false);
 std::atomic<bool>            g_audioInitialized(false);
+std::atomic<bool>            g_fastForward{false};
+std::atomic<bool>            g_bilinearFilter{true};
 std::thread                  g_gameThread;
 std::mutex                   g_inputMutex;
 std::unordered_map<std::string, std::string> g_core_options;
@@ -30,7 +32,8 @@ EGLDisplay                   g_eglDisplay    = EGL_NO_DISPLAY;
 EGLSurface                   g_eglSurface    = EGL_NO_SURFACE;
 EGLContext                   g_eglContext    = EGL_NO_CONTEXT;
 GLuint                       g_textureId     = 0;
-GLuint                       g_shaderProgram = 0;
+GLuint                       g_shaderPrograms[3] = {0, 0, 0};
+std::atomic<int>             g_activeShaderIndex(0);
 GLuint                       g_vbo           = 0;
 GLuint                       g_hw_fbo        = 0;
 GLuint                       g_hw_fbo_tex    = 0;
@@ -55,10 +58,12 @@ std::mutex                   g_videoMutex;
 std::vector<uint8_t>         g_videoBuffer;
 bool                         g_videoFrameReady       = false;
 
-// ── GameLoop State ────────────────────────────────────────────────────────────
+// ── GameLoop State ──────────────────────────────────────────────────────────────
 std::string                  g_romPath;
 std::string                  g_sramPath;
+int16_t                      g_analog_state[2][2] = {{0}};
 std::atomic<bool>            g_enginePaused(false);
+JavaVM*                      g_javaVM = nullptr;
 
 // ── Audio Resampler ───────────────────────────────────────────────────────────
 double                       g_coreSampleRate        = 44100.0;

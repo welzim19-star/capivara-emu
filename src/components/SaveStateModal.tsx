@@ -87,9 +87,13 @@ export const SaveStateModal: React.FC<Props> = ({ tenant, game, mode, onSelectSl
                   `}
                 >
                   {/* Thumbnail Area */}
-                  <div className="aspect-video bg-black flex items-center justify-center relative">
+                  <div className="aspect-video bg-black flex items-center justify-center relative overflow-hidden">
                     {save?.thumbnailBase64 ? (
-                      <img src={save.thumbnailBase64} alt={`Slot ${s.id}`} className="w-full h-full object-cover" />
+                      <img 
+                        src={save.thumbnailBase64.startsWith('data:') ? save.thumbnailBase64 : `data:image/jpeg;base64,${save.thumbnailBase64}`} 
+                        alt={`Slot ${s.id}`} 
+                        className="w-full h-full object-cover opacity-90 group-hover:scale-110 transition-transform duration-500" 
+                      />
                     ) : (
                       <span className="text-white/20 text-4xl font-black">NO DATA</span>
                     )}

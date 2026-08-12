@@ -183,10 +183,21 @@ bool retro_env_callback(unsigned cmd, void* data) {
 // ── Input Callbacks ───────────────────────────────────────────────────────────
 void retro_input_poll_cb(void) {}
 
-int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned /*index*/, unsigned id) {
-    if (port == 0 && device == RETRO_DEVICE_JOYPAD && id < 16) {
-        std::lock_guard<std::mutex> lock(g_inputMutex);
+int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, unsigned id) {
+    std::lock_guard<std::mutex> lock(g_inputMutex);
+    
+    // We only route inputs to port 0 (Player 1)
+    if (port != 0) {
+        return 0;
+    }
+
+    if (device == RETRO_DEVICE_JOYPAD) {
         return g_input_state[id] ? 1 : 0;
+    }
+    if (device == RETRO_DEVICE_ANALOG) {
+        if (index < 2 && id < 2) {
+            return g_analog_state[index][id];
+        }
     }
     return 0;
 }

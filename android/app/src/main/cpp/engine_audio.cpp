@@ -28,8 +28,13 @@ void enqueueAudioSample(int16_t left, int16_t right) {
 
     auto writeOne = [&](int16_t l, int16_t r) {
         int nextWriteIdx = (g_audioWriteIdx + 1) % AUDIO_BUFFER_COUNT;
-        while (nextWriteIdx == g_audioReadIdx && g_engineRunning)
+        while (nextWriteIdx == g_audioReadIdx && g_engineRunning) {
+            if (g_fastForward.load()) {
+                // Drop sample and return immediately so the emulator doesn't block!
+                return;
+            }
             g_audioCv.wait(lock);
+        }
         if (!g_engineRunning) return;
 
         g_audioBuffer[g_audioWriteIdx][g_audioWriteOffset++] = l;

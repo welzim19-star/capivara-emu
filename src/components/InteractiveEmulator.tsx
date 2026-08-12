@@ -5,9 +5,13 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { StatusBar } from '@capacitor/status-bar';
 import { SettingsMenu } from './SettingsMenu';
+import { VirtualJoystick } from './VirtualJoystick';
+import { netplay } from '../services/NetplayService';
 import { SaveStateModal } from './SaveStateModal';
+import { NetplayModal } from './NetplayModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGamepad } from '../hooks/useGamepad';
+import { SNESGamepad, MegaDriveGamepad, N64Gamepad, StartSelect } from './PolyGamepad';
 
 const CapivaraEngine = registerPlugin<any>('CapivaraEngine');
 
@@ -21,10 +25,12 @@ interface Props {
 export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onExit, onExitToDashboard }) => {
   const [notification, setNotification] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showNetplay, setShowNetplay] = useState(false);
   const [saveManagerMode, setSaveManagerMode] = useState<'save' | 'load' | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [showDebugLog, setShowDebugLog] = useState(false);
+  const [fastForward, setFastForward] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const logsEndRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -34,13 +40,21 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
 
   const lastGamepadActivity = useRef<number>(0);
 
+  const handleWakeLock = () => {
+    if ('wakeLock' in navigator) {
+      (navigator as any).wakeLock.request('screen').catch(() => {});
+    }
+  };
+
   const showToast = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 2500);
   };
 
   useGamepad(
-    (libretroId, isPressed) => emitNativeButton(libretroId, isPressed),
+    tenant.id,
+    (port, buttonId, isPressed) => emitNativeButton(port, buttonId, isPressed),
+    (port, stick, x, y) => emitAnalog(port, stick, x, y),
     () => { 
       lastGamepadActivity.current = Date.now(); 
       setIsGamepadActive(true);
@@ -48,6 +62,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
       gamepadTimeoutRef.current = setTimeout(() => {
         setIsGamepadActive(false);
       }, 5000);
+      handleWakeLock();
     }
   );
 
@@ -73,10 +88,19 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
         if (configMatrix.playResMulti !== undefined) libretroConfig['play_res_multi'] = String(configMatrix.playResMulti);
         if (configMatrix.playBilinearFiltering !== undefined) libretroConfig['play_bilinear_filtering'] = configMatrix.playBilinearFiltering ? 'enabled' : 'disabled';
         if (configMatrix.playPresentationMode !== undefined) libretroConfig['play_presentation_mode'] = configMatrix.playPresentationMode;
+        if (configMatrix.videoFilter !== undefined) libretroConfig['capivara_video_filter'] = configMatrix.videoFilter;
         // Merge remaining generic ones if they match exact libretro keys
         Object.entries(configMatrix).forEach(([k, v]) => {
            if (!libretroConfig[k] && typeof v === 'string') libretroConfig[k] = v;
         });
+
+        if (tenant.coreFile.includes('play_libretro')) {
+          try {
+            await CapivaraEngine.requestAllFilesAccess();
+          } catch (e) {
+            console.warn("requestAllFilesAccess not supported or failed", e);
+          }
+        }
 
         showToast("Carregando Core Nativo C++...");
         await CapivaraEngine.startGame({ 
@@ -94,6 +118,22 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
         // de espera e começar a renderizar o primeiro frame imediatamente.
         await CapivaraEngine.resume();
         showToast("Jogo Iniciado no Modo Nativo!");
+        
+        // Auto-Load Slot 0 if exists
+        const storageKey = `saves_${tenant.id}_${currentGame.id}`;
+        const savedData = localStorage.getItem(storageKey);
+        const saves = savedData ? JSON.parse(savedData) : {};
+        if (saves[0]) {
+          setTimeout(async () => {
+            try {
+              await CapivaraEngine.loadState({ slot: 0, hash: currentGame.id });
+              showToast("Auto-Load: Progresso Restaurado!");
+            } catch (e) {
+              console.warn("Auto-load failed", e);
+            }
+          }, 1000); // Give the core a second to initialize
+        }
+
       } catch (err: any) {
         const msg = err?.message ?? String(err);
         if (msg.startsWith('BIOS_MISSING:')) {
@@ -121,6 +161,23 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
         CapivaraEngine.resume();
       } else {
         CapivaraEngine.pause();
+        // Auto-Save on background
+        CapivaraEngine.saveState({ slot: 0, hash: currentGame.id }).then((result: any) => {
+          const storageKey = `saves_${tenant.id}_${currentGame.id}`;
+          const savedData = localStorage.getItem(storageKey);
+          const saves = savedData ? JSON.parse(savedData) : {};
+          saves[0] = {
+            id: `${currentGame.id}_0`,
+            gameId: currentGame.id,
+            tenantId: tenant.id,
+            slot: 0,
+            timestamp: new Date().toLocaleString(),
+            thumbnailBase64: result?.thumbnailBase64,
+            dataSizeKb: result?.dataSizeKb || 4096,
+            hash: currentGame.id
+          };
+          localStorage.setItem(storageKey, JSON.stringify(saves));
+        }).catch(() => console.warn("Auto-save failed"));
       }
     });
 
@@ -157,9 +214,17 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
     }
   }, [logs, showDebugLog]);
 
-  const emitNativeButton = async (buttonId: number, isPressed: boolean) => {
+  const emitNativeButton = async (port: number, buttonId: number, isPressed: boolean) => {
     try {
-      await CapivaraEngine.sendInput({ button: buttonId, isPressed });
+      await CapivaraEngine.sendInput({ port, button: buttonId, isPressed });
+      if (port === 0) netplay.broadcastButton(buttonId, isPressed);
+    } catch (e) {}
+  };
+
+  const emitAnalog = async (port: number, stick: number, x: number, y: number) => {
+    try {
+      await CapivaraEngine.sendAnalog({ port, stick, x, y });
+      if (port === 0) netplay.broadcastAnalog(stick, x, y);
     } catch (e) {}
   };
 
@@ -272,78 +337,108 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
         </div>
       )}
 
-      {/* Controles Virtuais Draggable - only show when showControls is true */}
-      <motion.div 
-        animate={{ opacity: showControls ? 1 : 0, pointerEvents: showControls ? 'auto' : 'none' }}
-        transition={{ duration: 0.3 }}
-        className="absolute inset-0 z-10 pointer-events-none overflow-hidden"
-      >
-        
-        {/* Direcional Analógico / D-Pad */}
-        <motion.div 
-          drag={editMode}
-          dragMomentum={false}
-          className={`absolute w-40 h-40 bg-white/10 rounded-full flex items-center justify-center border border-white/20 shadow-2xl backdrop-blur-md pointer-events-auto ${editMode ? 'ring-4 ring-cyan-500 cursor-move' : ''}`}
-          style={{ left: '2rem', bottom: '2rem' }}
+        {/* Polymorphic Gamepad HUD — dispatched by console type */}
+        <motion.div
+          animate={{ opacity: showControls ? 1 : 0, pointerEvents: showControls ? 'auto' : 'none' }}
+          transition={{ duration: 0.3 }}
+          className="absolute inset-0 z-10 pointer-events-none overflow-hidden"
         >
-          <button onPointerDown={() => emitNativeButton(4, true)} onPointerUp={() => emitNativeButton(4, false)} onPointerLeave={() => emitNativeButton(4, false)} onPointerCancel={() => emitNativeButton(4, false)} className="absolute top-0 w-12 h-12 active:bg-white/30 rounded-t-full transition" />
-          <button onPointerDown={() => emitNativeButton(5, true)} onPointerUp={() => emitNativeButton(5, false)} onPointerLeave={() => emitNativeButton(5, false)} onPointerCancel={() => emitNativeButton(5, false)} className="absolute bottom-0 w-12 h-12 active:bg-white/30 rounded-b-full transition" />
-          <button onPointerDown={() => emitNativeButton(6, true)} onPointerUp={() => emitNativeButton(6, false)} onPointerLeave={() => emitNativeButton(6, false)} onPointerCancel={() => emitNativeButton(6, false)} className="absolute left-0 w-12 h-12 active:bg-white/30 rounded-l-full transition" />
-          <button onPointerDown={() => emitNativeButton(7, true)} onPointerUp={() => emitNativeButton(7, false)} onPointerLeave={() => emitNativeButton(7, false)} onPointerCancel={() => emitNativeButton(7, false)} className="absolute right-0 w-12 h-12 active:bg-white/30 rounded-r-full transition" />
-          <div className="w-10 h-10 bg-black/40 rounded-full pointer-events-none" />
-        </motion.div>
-
-        {/* Action Buttons */}
-        <motion.div 
-          drag={editMode}
-          dragMomentum={false}
-          className={`absolute flex items-center justify-center w-40 h-40 pointer-events-auto ${editMode ? 'ring-4 ring-cyan-500 rounded-full cursor-move bg-white/10' : ''}`}
-          style={{ left: 'calc(100% - 12rem)', bottom: '2rem' }}
-        >
-          {is8Bit2Button && (
-            <div className="flex space-x-6">
-              <button onPointerDown={() => emitNativeButton(8, true)} onPointerUp={() => emitNativeButton(8, false)} onPointerLeave={() => emitNativeButton(8, false)} onPointerCancel={() => emitNativeButton(8, false)} className="w-16 h-16 rounded-full bg-red-600/80 active:bg-red-500 border-2 border-red-400 text-white font-black text-xl shadow-lg backdrop-blur-md">1</button>
-              <button onPointerDown={() => emitNativeButton(0, true)} onPointerUp={() => emitNativeButton(0, false)} onPointerLeave={() => emitNativeButton(0, false)} onPointerCancel={() => emitNativeButton(0, false)} className="w-16 h-16 rounded-full bg-cyan-500/80 active:bg-cyan-400 border-2 border-cyan-300 text-white font-black text-xl shadow-lg backdrop-blur-md">2</button>
-            </div>
-          )}
-
-          {(isSnesGba || is3dConsole) && (
-            <div className="relative w-full h-full">
-              <button onPointerDown={() => emitNativeButton(9, true)} onPointerUp={() => emitNativeButton(9, false)} onPointerLeave={() => emitNativeButton(9, false)} onPointerCancel={() => emitNativeButton(9, false)} className="absolute top-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-blue-600/80 active:bg-blue-500 border border-white/20 text-white font-bold backdrop-blur-md text-lg">{is3dConsole ? '△' : 'X'}</button>
-              <button onPointerDown={() => emitNativeButton(1, true)} onPointerUp={() => emitNativeButton(1, false)} onPointerLeave={() => emitNativeButton(1, false)} onPointerCancel={() => emitNativeButton(1, false)} className="absolute left-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-green-600/80 active:bg-green-500 border border-white/20 text-white font-bold backdrop-blur-md text-lg">{is3dConsole ? '□' : 'Y'}</button>
-              <button onPointerDown={() => emitNativeButton(8, true)} onPointerUp={() => emitNativeButton(8, false)} onPointerLeave={() => emitNativeButton(8, false)} onPointerCancel={() => emitNativeButton(8, false)} className="absolute right-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-red-600/80 active:bg-red-500 border border-white/20 text-white font-bold backdrop-blur-md text-lg">{is3dConsole ? '○' : 'A'}</button>
-              <button onPointerDown={() => emitNativeButton(0, true)} onPointerUp={() => emitNativeButton(0, false)} onPointerLeave={() => emitNativeButton(0, false)} onPointerCancel={() => emitNativeButton(0, false)} className="absolute bottom-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-yellow-500/80 active:bg-yellow-400 border border-white/20 text-white font-bold backdrop-blur-md text-lg">{is3dConsole ? '✕' : 'B'}</button>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Start / Select Buttons (Center Bottom) */}
-        <motion.div 
-          drag={editMode}
-          dragMomentum={false}
-          className={`absolute left-1/2 bottom-4 -translate-x-1/2 flex space-x-6 pointer-events-auto ${editMode ? 'ring-4 ring-cyan-500 rounded-full cursor-move p-2 bg-white/10' : ''}`}
-        >
-          <button onPointerDown={() => emitNativeButton(2, true)} onPointerUp={() => emitNativeButton(2, false)} onPointerLeave={() => emitNativeButton(2, false)} onPointerCancel={() => emitNativeButton(2, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
-            SELECT
-          </button>
-          <button onPointerDown={() => emitNativeButton(3, true)} onPointerUp={() => emitNativeButton(3, false)} onPointerLeave={() => emitNativeButton(3, false)} onPointerCancel={() => emitNativeButton(3, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
-            START
-          </button>
-        </motion.div>
-        
-        {/* Visible Pause Button (top-center) */}
-        {!editMode && (
-          <button
-            className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-auto px-5 py-1.5 rounded-full text-xs font-bold tracking-widest text-white/60 bg-black/40 border border-white/10 backdrop-blur-sm active:scale-95 transition-all"
-            onClick={() => {
-              setShowSettings(true);
-              CapivaraEngine.pause();
+          {/* Left side: Joystick (all consoles) */}
+          <VirtualJoystick
+            editMode={editMode}
+            className="left-8 bottom-8"
+            onDirectionChange={(dir) => {
+               emitNativeButton(0, 4, false);
+               emitNativeButton(0, 5, false);
+               emitNativeButton(0, 6, false);
+               emitNativeButton(0, 7, false);
+               if (dir === 'UP')    emitNativeButton(0, 4, true);
+               if (dir === 'DOWN')  emitNativeButton(0, 5, true);
+               if (dir === 'LEFT')  emitNativeButton(0, 6, true);
+               if (dir === 'RIGHT') emitNativeButton(0, 7, true);
             }}
-          >
-            ⏸ MENU
-          </button>
-        )}
-      </motion.div>
+          />
+
+          {/* Console-specific gamepad */}
+          {tenant.id === 'SNES_SNES9X' || tenant.id === 'GBA_MGBA' ? (
+            <SNESGamepad onEmit={emitNativeButton} />
+          ) : tenant.id === 'GENESIS_GENPLUSGX' || tenant.id === 'MASTERSYSTEM_PICODRIVE' ? (
+            <MegaDriveGamepad onEmit={emitNativeButton} />
+          ) : tenant.id === 'N64_MUPEN64PLUS' ? (
+            <N64Gamepad onEmit={emitNativeButton} onAxis={emitAnalog} />
+          ) : tenant.gamepadStyle ? (
+            // Legacy fallback: consoles that still use the old tenant.gamepadStyle object
+            <motion.div
+              drag={editMode}
+              dragMomentum={false}
+              className={`absolute flex items-center justify-center w-40 h-40 pointer-events-auto ${editMode ? 'ring-4 ring-cyan-500 rounded-full cursor-move bg-white/10' : ''}`}
+              style={{ left: 'calc(100% - 12rem)', bottom: '2rem' }}
+            >
+              {tenant.gamepadStyle.type === '2-button' ? (
+                <div className="flex space-x-6">
+                  <button onPointerDown={() => emitNativeButton(0, 8, true)} onPointerUp={() => emitNativeButton(0, 8, false)} onPointerLeave={() => emitNativeButton(0, 8, false)} onPointerCancel={() => emitNativeButton(0, 8, false)} className={`w-16 h-16 rounded-full ${tenant.gamepadStyle.bottom?.colorClass} border-2 border-white/20 font-black text-xl shadow-lg backdrop-blur-md`}>{tenant.gamepadStyle.bottom?.label}</button>
+                  <button onPointerDown={() => emitNativeButton(0, 0, true)} onPointerUp={() => emitNativeButton(0, 0, false)} onPointerLeave={() => emitNativeButton(0, 0, false)} onPointerCancel={() => emitNativeButton(0, 0, false)} className={`w-16 h-16 rounded-full ${tenant.gamepadStyle.right?.colorClass} border-2 border-white/20 font-black text-xl shadow-lg backdrop-blur-md`}>{tenant.gamepadStyle.right?.label}</button>
+                </div>
+              ) : (
+                <div className="relative w-full h-full">
+                  {tenant.gamepadStyle.right && <button onPointerDown={() => emitNativeButton(0, 8, true)} onPointerUp={() => emitNativeButton(0, 8, false)} onPointerLeave={() => emitNativeButton(0, 8, false)} onPointerCancel={() => emitNativeButton(0, 8, false)} className={`absolute right-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.right.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.right.label}</button>}
+                  {tenant.gamepadStyle.bottom && <button onPointerDown={() => emitNativeButton(0, 0, true)} onPointerUp={() => emitNativeButton(0, 0, false)} onPointerLeave={() => emitNativeButton(0, 0, false)} onPointerCancel={() => emitNativeButton(0, 0, false)} className={`absolute bottom-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.bottom.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.bottom.label}</button>}
+                  {tenant.gamepadStyle.top && <button onPointerDown={() => emitNativeButton(0, 9, true)} onPointerUp={() => emitNativeButton(0, 9, false)} onPointerLeave={() => emitNativeButton(0, 9, false)} onPointerCancel={() => emitNativeButton(0, 9, false)} className={`absolute top-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.top.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.top.label}</button>}
+                  {tenant.gamepadStyle.left && <button onPointerDown={() => emitNativeButton(0, 1, true)} onPointerUp={() => emitNativeButton(0, 1, false)} onPointerLeave={() => emitNativeButton(0, 1, false)} onPointerCancel={() => emitNativeButton(0, 1, false)} className={`absolute left-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.left.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.left.label}</button>}
+                  {tenant.gamepadStyle.l1 && <button onPointerDown={() => emitNativeButton(0, 10, true)} onPointerUp={() => emitNativeButton(0, 10, false)} onPointerLeave={() => emitNativeButton(0, 10, false)} onPointerCancel={() => emitNativeButton(0, 10, false)} className={`absolute -top-12 left-2 w-12 h-12 rounded-full ${tenant.gamepadStyle.l1.colorClass} border border-white/20 font-bold backdrop-blur-md text-sm text-white`}>{tenant.gamepadStyle.l1.label}</button>}
+                  {tenant.gamepadStyle.r1 && <button onPointerDown={() => emitNativeButton(0, 11, true)} onPointerUp={() => emitNativeButton(0, 11, false)} onPointerLeave={() => emitNativeButton(0, 11, false)} onPointerCancel={() => emitNativeButton(0, 11, false)} className={`absolute -top-12 right-2 w-12 h-12 rounded-full ${tenant.gamepadStyle.r1.colorClass} border border-white/20 font-bold backdrop-blur-md text-sm text-white`}>{tenant.gamepadStyle.r1.label}</button>}
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            // No-pad consoles (PS1, PS2, PSP, MAME, etc.) — use StartSelect only
+            <StartSelect onEmit={emitNativeButton} />
+          )}
+
+          {/* Start/Select center — only for consoles NOT using PolyGamepad (PolyGamepad includes own Start) */}
+          {!['SNES_SNES9X', 'GBA_MGBA', 'GENESIS_GENPLUSGX', 'MASTERSYSTEM_PICODRIVE', 'N64_MUPEN64PLUS'].includes(tenant.id) && tenant.gamepadStyle && (
+            <motion.div
+              drag={editMode}
+              dragMomentum={false}
+              className={`absolute left-1/2 bottom-4 -translate-x-1/2 flex space-x-6 pointer-events-auto ${editMode ? 'ring-4 ring-cyan-500 rounded-full cursor-move p-2 bg-white/10' : ''}`}
+            >
+              <button onPointerDown={() => emitNativeButton(0, 2, true)} onPointerUp={() => emitNativeButton(0, 2, false)} onPointerLeave={() => emitNativeButton(0, 2, false)} onPointerCancel={() => emitNativeButton(0, 2, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
+                SELECT
+              </button>
+              <button onPointerDown={() => emitNativeButton(0, 3, true)} onPointerUp={() => emitNativeButton(0, 3, false)} onPointerLeave={() => emitNativeButton(0, 3, false)} onPointerCancel={() => emitNativeButton(0, 3, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
+                START
+              </button>
+            </motion.div>
+          )}
+
+          {/* Visible Pause/FF button (top-center) */}
+          {!editMode && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center space-x-2">
+              <button
+                className="pointer-events-auto px-5 py-1.5 rounded-full text-xs font-bold tracking-widest text-white/60 bg-black/40 border border-white/10 backdrop-blur-sm active:scale-95 transition-all"
+                onClick={() => {
+                  setShowSettings(true);
+                  CapivaraEngine.pause();
+                }}
+              >
+                ⏸ MENU
+              </button>
+              
+              {!is3dConsole && (
+                <button
+                  className={`pointer-events-auto px-4 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all backdrop-blur-sm border ${fastForward ? 'bg-cyan-500/80 text-white border-cyan-400 shadow-lg shadow-cyan-500/30' : 'bg-black/40 text-white/60 border-white/10 active:scale-95'}`}
+                  onClick={() => {
+                    const newState = !fastForward;
+                    setFastForward(newState);
+                    emitNativeButton(0, 13, newState);
+                  }}
+                >
+                  {fastForward ? '▶▶ FF ON' : '⏩ FF'}
+                </button>
+              )}
+            </div>
+          )}
+        </motion.div>
 
       {/* Floating Logcat Panel */}
       <AnimatePresence>
@@ -422,7 +517,24 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
               await CapivaraEngine.stopLogStream();
             }
           }}
+          onOpenNetplay={() => {
+            setShowSettings(false);
+            setShowNetplay(true);
+            CapivaraEngine.resume(); // keep running while connecting
+          }}
+          onSetVideoFilter={async (filter: number) => {
+            try {
+              await CapivaraEngine.setVideoFilter({ filter });
+              showToast(['Filtro: Nítido', 'Filtro: Suave', 'Filtro: CRT', 'Filtro: LCD'][filter] ?? 'Filtro aplicado!');
+            } catch (e) {
+              console.warn('setVideoFilter not available', e);
+            }
+          }}
         />
+      )}
+
+      {showNetplay && (
+        <NetplayModal onClose={() => setShowNetplay(false)} />
       )}
 
       {saveManagerMode && (

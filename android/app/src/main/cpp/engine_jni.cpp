@@ -3,6 +3,7 @@
 // This is the ONLY file that uses JNI types. All native logic lives in other modules.
 
 #include "engine_globals.h"
+#include "adapters/CoreAdapterFactory.h"
 
 // ── Helper: load .so and bind all Libretro symbols ───────────────────────────
 bool loadCore(const char* path) {
@@ -41,6 +42,7 @@ bool loadCore(const char* path) {
     BIND_SYM(unserialize)
     BIND_SYM(get_memory_data)
     BIND_SYM(get_memory_size)
+    BIND_SYM(set_controller_port_device)
 #undef BIND_SYM
 
     // Register our callbacks. set_environment MUST come before set_video/audio/input
@@ -56,6 +58,22 @@ bool loadCore(const char* path) {
     // It is called at the start of GameLoop so that init, load_game, and run
     // all execute on the same OS thread (Libretro TLS requirement).
 
+    // Emulate JNI_OnLoad for Android-native libretro cores
+    typedef jint (*JNI_OnLoad_t)(JavaVM*, void*);
+    JNI_OnLoad_t jni_onload = (JNI_OnLoad_t)dlsym(g_core_handle, "JNI_OnLoad");
+    if (jni_onload && g_javaVM) {
+        LOGI("Calling JNI_OnLoad for core...");
+        jni_onload(g_javaVM, nullptr);
+    } else if (g_javaVM) {
+        // Fallback for Play! core which doesn't export JNI_OnLoad but leaves SetJavaVM mangled
+        typedef void (*SetJavaVM_t)(JavaVM*);
+        SetJavaVM_t set_javavm = (SetJavaVM_t)dlsym(g_core_handle, "_ZN9Framework7CJavaVM9SetJavaVMEP7_JavaVM");
+        if (set_javavm) {
+            LOGI("Injecting JavaVM into Play! core via mangled CJavaVM::SetJavaVM...");
+            set_javavm(g_javaVM);
+        }
+    }
+
     return true;
 }
 
@@ -63,6 +81,8 @@ bool loadCore(const char* path) {
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_initEngine(JNIEnv* env, jobject, jstring corePath) {
     register_crash_handlers();
+
+    env->GetJavaVM(&g_javaVM);
 
     const char* path = env->GetStringUTFChars(corePath, nullptr);
     g_corePath = path;
@@ -88,7 +108,15 @@ Java_com_capivaraemu_studio_CapivaraEngine_injectCoreConfiguration(JNIEnv* env, 
         if (eq != std::string::npos) {
             std::string key = line.substr(0, eq);
             std::string val = line.substr(eq + 1);
-            g_core_options[key] = val;
+            if (key == "capivara_video_filter") {
+                g_bilinearFilter.store(val == "Bilinear");
+            } else if (key == "capivara_shader") {
+                if (val == "CRT") g_activeShaderIndex.store(1);
+                else if (val == "LCD") g_activeShaderIndex.store(2);
+                else g_activeShaderIndex.store(0);
+            } else {
+                g_core_options[key] = val;
+            }
             LOGI("Injected Config: %s = %s", key.c_str(), val.c_str());
         }
     }
@@ -220,6 +248,21 @@ Java_com_capivaraemu_studio_CapivaraEngine_sendInput(JNIEnv*, jobject, jint /*po
     if (buttonId >= 0 && buttonId < 16) {
         std::lock_guard<std::mutex> lock(g_inputMutex);
         g_input_state[buttonId] = isPressed;
+        
+        // Intercept R2 (13) for Fast Forward if supported by the adapter
+        extern std::unique_ptr<ICoreAdapter> g_coreAdapter;
+        if (buttonId == 13 && g_coreAdapter && g_coreAdapter->supportsFastForward()) {
+            g_fastForward.store(isPressed);
+        }
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_sendAnalogInput(JNIEnv* /*env*/, jobject /*thiz*/,
+                                                     jint port, jint index, jint id, jshort value) {
+    if (port == 0 && index >= 0 && index < 2 && id >= 0 && id < 2) {
+        std::lock_guard<std::mutex> lock(g_inputMutex);
+        g_analog_state[index][id] = value;
     }
 }
 
@@ -251,3 +294,76 @@ Java_com_capivaraemu_studio_CapivaraEngine_destroyEngine(JNIEnv*, jobject) {
 
     LOGI("Engine destroyed");
 }
+
+// ── JNI: setVideoFilter ───────────────────────────────────────────────────────
+// filter: 0=Sharp/Nearest, 1=Bilinear(Smooth), 2=CRT Scanlines, 3=LCD Grid
+extern "C" JNIEXPORT void JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_setVideoFilter(JNIEnv*, jobject, jint filter) {
+    // Bilinear toggle: 0=Nearest(Sharp), 1=Bilinear(Smooth)
+    bool bilinear = (filter == 1);
+    g_bilinearFilter.store(bilinear);
+
+    // Update shader selection: 0=Sharp, 2=CRT, 3=LCD (1=bilinear uses shader 0)
+    if (filter == 2) {
+        g_activeShaderIndex.store(1); // CRT
+    } else if (filter == 3) {
+        g_activeShaderIndex.store(2); // LCD
+    } else {
+        g_activeShaderIndex.store(0); // Sharp or Smooth — same shader, different GL_LINEAR/GL_NEAREST
+    }
+
+    // Apply texture filter immediately if texture is already bound
+    if (g_textureId != 0) {
+        GLint texFilter = bilinear ? GL_LINEAR : GL_NEAREST;
+        glBindTexture(GL_TEXTURE_2D, g_textureId);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, texFilter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texFilter);
+    }
+
+    LOGI("Video filter set to: %d (bilinear=%d, shaderIdx=%d)", filter, bilinear, g_activeShaderIndex.load());
+}
+
+// ── JNI: captureFramePixels — returns RGBA8888 pixels for screenshot ───────────
+// Returns null if no software frame is available (HW render cores like PS2/N64).
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_captureFramePixels(JNIEnv* env, jobject) {
+    std::lock_guard<std::mutex> lock(g_videoMutex);
+    if (g_videoBuffer.empty()) return nullptr;
+
+    // g_videoBuffer is already RGBA8888 (converted by retro_video_cb).
+    // For RGB565 format, we need to convert to RGBA8888 first.
+    if (g_pixel_format == RETRO_PIXEL_FORMAT_RGB565) {
+        size_t pixelCount = g_video_width * g_video_height;
+        std::vector<uint8_t> rgba(pixelCount * 4);
+        const uint16_t* src = reinterpret_cast<const uint16_t*>(g_videoBuffer.data());
+        for (size_t i = 0; i < pixelCount; i++) {
+            uint16_t p = src[i];
+            uint8_t r = ((p >> 11) & 0x1F) << 3; r |= r >> 5;
+            uint8_t g = ((p >>  5) & 0x3F) << 2; g |= g >> 6;
+            uint8_t b = ( p        & 0x1F) << 3; b |= b >> 5;
+            rgba[i*4+0] = r;
+            rgba[i*4+1] = g;
+            rgba[i*4+2] = b;
+            rgba[i*4+3] = 255;
+        }
+        jbyteArray result = env->NewByteArray((jsize)rgba.size());
+        env->SetByteArrayRegion(result, 0, (jsize)rgba.size(), (const jbyte*)rgba.data());
+        return result;
+    }
+
+    // RGBA8888 / XRGB8888 already converted by retro_video_cb
+    jbyteArray result = env->NewByteArray((jsize)g_videoBuffer.size());
+    env->SetByteArrayRegion(result, 0, (jsize)g_videoBuffer.size(),
+                            (const jbyte*)g_videoBuffer.data());
+    return result;
+}
+
+// ── JNI: getVideoResolution — width/height for screenshot bitmap creation ──────
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_getVideoResolution(JNIEnv* env, jobject) {
+    jintArray result = env->NewIntArray(2);
+    jint res[2] = { (jint)g_video_width, (jint)g_video_height };
+    env->SetIntArrayRegion(result, 0, 2, res);
+    return result;
+}
+

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TenantInfo, GameItem, CoreConfigTemplate } from '../types';
 import { registerPlugin } from '@capacitor/core';
 import { EmulatorConfigModal } from './EmulatorConfigModal';
@@ -40,7 +40,7 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
 
     return Promise.all(
       validFiles.map(async (f) => {
-        const metadata = await GameScraperService.scrapeBoxart(f.name, tenant.gradient);
+        const metadata = await GameScraperService.scrapeBoxart(f.name, tenant.gradient, tenant.id, f.uri);
         return {
           id: f.uri,
           title: metadata.title,
@@ -187,7 +187,16 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white/80">Biblioteca</h3>
           <div className="flex items-center gap-3">
-
+            {tenant.id === 'PS2_NETHERSX2' && (
+              <button onClick={async () => {
+                try {
+                  await CapivaraEngine.requestAllFilesAccess();
+                  alert("Permissão solicitada! Necessário para rodar PS2/PSP sem crash.");
+                } catch(e) {}
+              }} className="px-4 py-2 bg-amber-600/80 hover:bg-amber-500 text-white text-sm font-bold rounded-lg transition">
+                ⚡ Fix Acesso (ISOs)
+              </button>
+            )}
             <button onClick={handlePickDirectory} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-lg transition">
               {mappedDir ? 'Alterar Pasta' : 'Mapear Pasta de ROMs'}
             </button>
@@ -211,20 +220,60 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
             {roms.map((rom, idx) => (
               <div
                 key={idx}
-                onClick={() => handleLaunchGame(rom)}
-                className="group flex flex-col items-center cursor-pointer"
+                className="group flex flex-col items-center cursor-pointer relative"
               >
+                {/* Hidden file input for custom cover */}
+                <input
+                  id={`cover-picker-${idx}`}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const b64 = reader.result as string;
+                      GameScraperService.setCustomCover(rom.uri, b64);
+                      setRoms(prev => prev.map((r, i) => i === idx ? { ...r, boxArtUrl: b64 } : r));
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = '';
+                  }}
+                />
                 <div className="w-full aspect-[3/4] rounded-xl overflow-hidden shadow-lg border border-white/10 group-hover:border-white/50 group-hover:scale-[1.05] transition-all duration-300 relative bg-zinc-900">
                   {rom.boxArtUrl ? (
-                    <img src={rom.boxArtUrl} alt={rom.title} className="w-full h-full object-cover" />
+                    <img
+                      src={rom.boxArtUrl}
+                      alt={rom.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150"><rect width="100" height="150" fill="%23333"/><text x="50" y="75" font-family="Arial" font-size="14" fill="white" text-anchor="middle">No Cover</text></svg>';
+                      }}
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-white/20">🕹️</div>
                   )}
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  {/* Play overlay */}
+                  <div
+                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                    onClick={() => handleLaunchGame(rom)}
+                  >
                     <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center pl-1 shadow-2xl">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="black"><path d="M8 5v14l11-7z"/></svg>
                     </div>
                   </div>
+                  {/* Edit Cover button (top-right corner, appears on hover) */}
+                  <button
+                    className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black text-xs z-10"
+                    title="Editar Capa"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      document.getElementById(`cover-picker-${idx}`)?.click();
+                    }}
+                  >
+                    ✏️
+                  </button>
                 </div>
                 <span className="mt-2 text-center text-xs font-bold text-white/80 group-hover:text-white truncate w-full px-1">
                   {rom.title}

@@ -13,7 +13,9 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
     graphicsApi: 'Vulkan',
     aspectRatio: 'Core Provided',
     fastmem: true,
-    vSync: true
+    vSync: true,
+    videoFilter: 'Bilinear',
+    showFPS: false
   });
 
   const handleChange = (field: keyof CoreConfigTemplate, value: any) => {
@@ -30,9 +32,9 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
   const isArcade = tenant.id === 'MAME_2003PLUS' || tenant.id === 'NEOGEO_FBNEO';
 
   return (
-    <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-[110] backdrop-blur-md">
-      <div className="bg-zinc-950 border border-cyan-900/50 p-6 rounded-2xl w-[90%] max-w-2xl shadow-2xl flex flex-col h-[80%] max-h-[600px]">
-        <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10">
+    <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-[110] backdrop-blur-md">
+      <div className="bg-zinc-950 border border-cyan-900/50 p-4 sm:p-6 rounded-2xl w-[98%] max-w-4xl shadow-2xl flex flex-col h-[96%]">
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10">
           <div>
             <h2 className="text-white font-black text-xl tracking-wider">CORE MATRIX CONFIG</h2>
             <p className="text-cyan-400 text-xs font-mono uppercase">{tenant.name} - {tenant.coreName}</p>
@@ -70,11 +72,29 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
                   <option value="16:9">16:9 Widescreen Hack</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-white/50 text-xs mb-1">Shader / Pós-Processamento</label>
+                <select 
+                  className="w-full bg-zinc-900 border border-white/10 rounded p-2 text-white outline-none focus:border-cyan-500"
+                  value={config.capivara_shader || 'Sharp'}
+                  onChange={(e) => handleChange('capivara_shader', e.target.value)}
+                >
+                  <option value="Sharp">Nenhum (Pixel-Perfect)</option>
+                  <option value="CRT">TV de Tubo (CRT Scanlines)</option>
+                  <option value="LCD">GameBoy (Matrix LCD)</option>
+                </select>
+              </div>
             </div>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input type="checkbox" checked={config.vSync} onChange={(e) => handleChange('vSync', e.target.checked)} className="accent-cyan-500 w-4 h-4" />
-              <span>Enable V-Sync (Anti-Tearing)</span>
-            </label>
+            <div className="flex space-x-6 mt-4">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" checked={config.vSync !== false} onChange={(e) => handleChange('vSync', e.target.checked)} className="accent-cyan-500 w-6 h-6 shrink-0" />
+                <span>V-Sync (Anti-Tearing)</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" checked={config.showFPS} onChange={(e) => handleChange('showFPS', e.target.checked)} className="accent-cyan-500 w-6 h-6 shrink-0" />
+                <span>Show FPS</span>
+              </label>
+            </div>
           </div>
 
           {/* PS2 Matrix */}
@@ -101,7 +121,7 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
                 </div>
                 <div className="col-span-2">
                   <label className="flex items-center space-x-2 cursor-pointer mt-2">
-                    <input type="checkbox" checked={config.playBilinearFiltering !== false} onChange={(e) => handleChange('playBilinearFiltering', e.target.checked)} className="accent-indigo-500 w-4 h-4" />
+                    <input type="checkbox" checked={config.playBilinearFiltering !== false} onChange={(e) => handleChange('playBilinearFiltering', e.target.checked)} className="accent-indigo-500 w-6 h-6 shrink-0" />
                     <span>Force Bilinear Filtering (Smooth textures)</span>
                   </label>
                 </div>
@@ -109,7 +129,7 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
               
               <div className="space-y-2 mt-2 bg-zinc-900/50 p-3 rounded-lg border border-red-500/20">
                 <label className="flex items-center space-x-2 cursor-pointer">
-                  <input type="checkbox" checked={config.fastmem !== false} onChange={(e) => handleChange('fastmem', e.target.checked)} className="accent-red-500 w-4 h-4" />
+                  <input type="checkbox" checked={config.fastmem !== false} onChange={(e) => handleChange('fastmem', e.target.checked)} className="accent-red-500 w-6 h-6 shrink-0" />
                   <span className="text-red-400 font-bold">MMU Fastmem Bypass (DANGER: Kernel Mode)</span>
                 </label>
                 <p className="text-[10px] text-white/40 ml-6">Required to prevent Black Screens on PS2. Bypasses Android memory manager for direct DMA access.</p>
@@ -122,7 +142,7 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
             <div className="space-y-4">
               <h3 className="text-blue-500 font-bold border-l-2 border-blue-500 pl-2">PS1 ENHANCEMENTS</h3>
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={config.pgxpPerspectiveCorrect || false} onChange={(e) => handleChange('pgxpPerspectiveCorrect', e.target.checked)} className="accent-blue-500 w-4 h-4" />
+                <input type="checkbox" checked={config.pgxpPerspectiveCorrect || false} onChange={(e) => handleChange('pgxpPerspectiveCorrect', e.target.checked)} className="accent-blue-500 w-6 h-6 shrink-0" />
                 <span>PGXP Perspective Correct (Fix polygon wobble)</span>
               </label>
               <label className="flex items-center space-x-2 cursor-pointer">
@@ -147,11 +167,11 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
                 </div>
               </div>
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={config.simulateBlockTransfer || false} onChange={(e) => handleChange('simulateBlockTransfer', e.target.checked)} className="accent-teal-500 w-4 h-4" />
+                <input type="checkbox" checked={config.simulateBlockTransfer || false} onChange={(e) => handleChange('simulateBlockTransfer', e.target.checked)} className="accent-teal-500 w-6 h-6 shrink-0" />
                 <span>Simulate Block Transfer (Fix graphic glitches)</span>
               </label>
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={config.jitBlockTransfer !== false} onChange={(e) => handleChange('jitBlockTransfer', e.target.checked)} className="accent-teal-500 w-4 h-4" />
+                <input type="checkbox" checked={config.jitBlockTransfer !== false} onChange={(e) => handleChange('jitBlockTransfer', e.target.checked)} className="accent-teal-500 w-6 h-6 shrink-0" />
                 <span>JIT Block Transfer (Performance Boost)</span>
               </label>
             </div>
@@ -186,11 +206,11 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
             <div className="space-y-4">
               <h3 className="text-purple-500 font-bold border-l-2 border-purple-500 pl-2">SUPER SYSTEM ENHANCEMENTS</h3>
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={config.mode7Filtering || false} onChange={(e) => handleChange('mode7Filtering', e.target.checked)} className="accent-purple-500 w-4 h-4" />
+                <input type="checkbox" checked={config.mode7Filtering || false} onChange={(e) => handleChange('mode7Filtering', e.target.checked)} className="accent-purple-500 w-6 h-6 shrink-0" />
                 <span>HD Mode-7 Filtering (Mario Kart / F-Zero)</span>
               </label>
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={config.dspAudioEnhancement || false} onChange={(e) => handleChange('dspAudioEnhancement', e.target.checked)} className="accent-purple-500 w-4 h-4" />
+                <input type="checkbox" checked={config.dspAudioEnhancement || false} onChange={(e) => handleChange('dspAudioEnhancement', e.target.checked)} className="accent-purple-500 w-6 h-6 shrink-0" />
                 <span>DSP Audio Interpolation (No Crackling)</span>
               </label>
             </div>
@@ -201,11 +221,11 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
             <div className="space-y-4">
               <h3 className="text-emerald-500 font-bold border-l-2 border-emerald-500 pl-2">HANDHELD FILTERS</h3>
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={config.colorCorrection || true} onChange={(e) => handleChange('colorCorrection', e.target.checked)} className="accent-emerald-500 w-4 h-4" />
+                <input type="checkbox" checked={config.colorCorrection || true} onChange={(e) => handleChange('colorCorrection', e.target.checked)} className="accent-emerald-500 w-6 h-6 shrink-0" />
                 <span>LCD Color Correction (Fix washed out colors)</span>
               </label>
               <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={config.lcdGhostingFilter || false} onChange={(e) => handleChange('lcdGhostingFilter', e.target.checked)} className="accent-emerald-500 w-4 h-4" />
+                <input type="checkbox" checked={config.lcdGhostingFilter || false} onChange={(e) => handleChange('lcdGhostingFilter', e.target.checked)} className="accent-emerald-500 w-6 h-6 shrink-0" />
                 <span>Motion Ghosting Filter (Original Hardware Feel)</span>
               </label>
             </div>
@@ -253,9 +273,9 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
 
         </div>
 
-        <div className="mt-6 pt-4 border-t border-white/10 flex justify-end space-x-3">
-          <button onClick={onClose} className="px-6 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition">Cancel</button>
-          <button onClick={() => onSave(config)} className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black shadow-lg shadow-cyan-500/20 transition">Flash Config</button>
+        <div className="mt-4 pt-4 border-t border-white/10 flex justify-end space-x-4 shrink-0">
+          <button onClick={onClose} className="px-8 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition">Cancel</button>
+          <button onClick={() => onSave(config)} className="px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black shadow-lg shadow-cyan-500/20 transition">Flash Config</button>
         </div>
       </div>
     </div>

@@ -13,7 +13,9 @@ object CapivaraEngine {
     external fun initEngine(corePath: String): Boolean
     external fun setSurface(surface: Surface)
     external fun loadGame(romPath: String, sramPath: String): Boolean
+    // Gamepad Input
     external fun sendInput(port: Int, button: Int, isPressed: Boolean)
+    external fun sendAnalogInput(port: Int, index: Int, id: Int, value: Short)
     external fun pause()
     external fun resume()
     external fun destroyEngine()
@@ -25,4 +27,11 @@ object CapivaraEngine {
 
     // Phase 1.1: BIOS / System Directory injection
     external fun setSystemDirectory(systemDir: String, saveDir: String)
+
+    // Season 2: Video Filters & Screenshot
+    // filter: 0=Sharp, 1=Smooth(Bilinear), 2=CRT, 3=LCD
+    external fun setVideoFilter(filter: Int)
+    external fun captureFramePixels(): ByteArray?
+    external fun getVideoResolution(): IntArray
 }
+

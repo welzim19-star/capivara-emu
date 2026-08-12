@@ -24,6 +24,33 @@ static const char* kFragmentShaderSrc =
     "  fragColor = vec4(texture(uTexture, vTexCoord).rgb, 1.0);\n"
     "}\n";
 
+static const char* kFragmentShaderCRT =
+    "#version 300 es\n"
+    "precision mediump float;\n"
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uTexture;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "  vec4 tex = texture(uTexture, vTexCoord);\n"
+    "  float scanline = sin(vTexCoord.y * 800.0) * 0.1;\n"
+    "  tex.rgb -= scanline;\n"
+    "  fragColor = vec4(tex.rgb, 1.0);\n"
+    "}\n";
+
+static const char* kFragmentShaderLCD =
+    "#version 300 es\n"
+    "precision mediump float;\n"
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uTexture;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "  vec4 tex = texture(uTexture, vTexCoord);\n"
+    "  float gridX = mod(vTexCoord.x * 600.0, 1.0);\n"
+    "  float gridY = mod(vTexCoord.y * 400.0, 1.0);\n"
+    "  if(gridX < 0.1 || gridY < 0.1) tex.rgb *= 0.8;\n"
+    "  fragColor = vec4(tex.rgb, 1.0);\n"
+    "}\n";
+
 // ── Shader Compiler ───────────────────────────────────────────────────────────
 GLuint compileShader(GLenum type, const char* src) {
     GLuint shader = glCreateShader(type);
@@ -74,18 +101,30 @@ bool initEGL() {
         return false;
     }
 
-    // Build shader program for software-rendered cores
+    // Disable VSync so that audio buffering paces the emulation loop!
+    // This prevents micro-stuttering ("picotando") in cores with mismatched framerates (like PAL 50Hz).
+    eglSwapInterval(g_eglDisplay, 0);
+
+    // Build shader programs for software-rendered cores
     GLuint vs = compileShader(GL_VERTEX_SHADER,   kVertexShaderSrc);
-    GLuint fs = compileShader(GL_FRAGMENT_SHADER, kFragmentShaderSrc);
-    g_shaderProgram = glCreateProgram();
-    glAttachShader(g_shaderProgram, vs);
-    glAttachShader(g_shaderProgram, fs);
-    glLinkProgram(g_shaderProgram);
+    GLuint fsSharp = compileShader(GL_FRAGMENT_SHADER, kFragmentShaderSrc);
+    GLuint fsCRT = compileShader(GL_FRAGMENT_SHADER, kFragmentShaderCRT);
+    GLuint fsLCD = compileShader(GL_FRAGMENT_SHADER, kFragmentShaderLCD);
+    
+    for (int i = 0; i < 3; i++) {
+        g_shaderPrograms[i] = glCreateProgram();
+        glAttachShader(g_shaderPrograms[i], vs);
+        if (i == 0) glAttachShader(g_shaderPrograms[i], fsSharp);
+        if (i == 1) glAttachShader(g_shaderPrograms[i], fsCRT);
+        if (i == 2) glAttachShader(g_shaderPrograms[i], fsLCD);
+        glLinkProgram(g_shaderPrograms[i]);
+    }
 
     glGenTextures(1, &g_textureId);
     glBindTexture(GL_TEXTURE_2D, g_textureId);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    GLint filter = g_bilinearFilter.load() ? GL_LINEAR : GL_NEAREST;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
 
     // Full-screen quad VBO
     float vertices[] = {
@@ -113,8 +152,11 @@ void setup_hw_fbo() {
     glGenTextures(1, &g_hw_fbo_tex);
     glBindTexture(GL_TEXTURE_2D, g_hw_fbo_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 2048, 2048, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    GLint filter = g_bilinearFilter.load() ? GL_LINEAR : GL_NEAREST;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_hw_fbo_tex, 0);
 
     if (g_hw_render_cb.depth) {
@@ -233,7 +275,11 @@ void renderFrame() {
     glViewport(0, 0, ANativeWindow_getWidth(g_window), ANativeWindow_getHeight(g_window));
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
-    glUseProgram(g_shaderProgram);
+    
+    int activeShader = g_activeShaderIndex.load();
+    if (activeShader < 0 || activeShader > 2) activeShader = 0;
+    GLuint currentProgram = g_shaderPrograms[activeShader];
+    glUseProgram(currentProgram);
 
     bool hasContent = false;
     {
@@ -256,10 +302,12 @@ void renderFrame() {
 
     if (hasContent && g_video_width > 0 && g_video_height > 0) {
         glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-        GLint posLoc = glGetAttribLocation(g_shaderProgram, "aPosition");
-        GLint texLoc = glGetAttribLocation(g_shaderProgram, "aTexCoord");
-        glEnableVertexAttribArray(posLoc);
-        glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        GLint posLoc = glGetAttribLocation(currentProgram, "aPosition");
+        GLint texLoc = glGetAttribLocation(currentProgram, "aTexCoord");
+        if (posLoc >= 0) {
+            glEnableVertexAttribArray(posLoc);
+            glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        }
 
         float uMax = 1.0f, vMax = 1.0f;
         if (g_hw_render_active) {
@@ -273,8 +321,10 @@ void renderFrame() {
         }
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glEnableVertexAttribArray(texLoc);
-        glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), texCoords);
+        if (texLoc >= 0) {
+            glEnableVertexAttribArray(texLoc);
+            glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), texCoords);
+        }
 
         GLushort indices[] = {0, 1, 2, 0, 2, 3};
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);

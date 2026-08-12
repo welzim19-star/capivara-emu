@@ -54,6 +54,7 @@ struct RetroCoreAPI {
     bool     (*unserialize)(const void *data, size_t size);
     void    *(*get_memory_data)(unsigned id);
     size_t   (*get_memory_size)(unsigned id);
+    void     (*set_controller_port_device)(unsigned port, unsigned device);
 };
 
 // ── Audio Constants ────────────────────────────────────────────────────────────
@@ -66,6 +67,8 @@ extern ANativeWindow*               g_window;
 extern void*                        g_core_handle;
 extern std::atomic<bool>            g_engineRunning;
 extern std::atomic<bool>            g_audioInitialized;
+extern std::atomic<bool>            g_fastForward;
+extern std::atomic<bool>            g_bilinearFilter;
 extern std::thread                  g_gameThread;
 extern std::mutex                   g_inputMutex;
 extern std::unordered_map<std::string, std::string> g_core_options;
@@ -83,7 +86,9 @@ extern EGLDisplay                   g_eglDisplay;
 extern EGLSurface                   g_eglSurface;
 extern EGLContext                   g_eglContext;
 extern GLuint                       g_textureId;
-extern GLuint                       g_shaderProgram;
+extern std::atomic<bool>            g_bilinearFilter;
+extern std::atomic<int>             g_activeShaderIndex; // 0=Sharp, 1=CRT, 2=LCD
+extern GLuint                       g_shaderPrograms[3];
 extern GLuint                       g_vbo;
 extern GLuint                       g_hw_fbo;
 extern GLuint                       g_hw_fbo_tex;
@@ -114,6 +119,13 @@ extern double                       g_resampleRatio;
 extern double                       g_fraction;
 extern int16_t                      g_lastLeft;
 extern int16_t                      g_lastRight;
+
+extern JavaVM*                      g_javaVM;
+
+// ── Input State ────────────────────────────────────────────────────────────────
+extern bool                         g_input_state[16];
+extern int16_t                      g_analog_state[2][2]; // [port][axis] (0=X, 1=Y)
+extern std::mutex                   g_inputMutex;
 
 // ── Cross-Module Function Declarations ────────────────────────────────────────
 void    udp_log(const char* fmt, ...);

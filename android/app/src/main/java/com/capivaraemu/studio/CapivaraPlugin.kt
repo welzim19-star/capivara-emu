@@ -174,8 +174,14 @@ class CapivaraPlugin : Plugin() {
         if (!biosFileUriStr.isNullOrEmpty() && !biosFileName.isNullOrEmpty()) {
             try {
                 val sysUri = Uri.parse(biosFileUriStr)
-                val targetName = if (coreName.contains("play") || coreName.contains("nethersx2")) "scph39001.bin" else biosFileName
-                val destFile = File(internalSystemDir, targetName)
+                var targetDir = internalSystemDir
+                val targetName = if (coreName.contains("play") || coreName.contains("nethersx2")) {
+                    targetDir = File(internalSystemDir, "bios").also { it.mkdirs() }
+                    "scph39001.bin"
+                } else {
+                    biosFileName
+                }
+                val destFile = File(targetDir, targetName)
                 
                 context.contentResolver.openInputStream(sysUri)?.use { input ->
                     FileOutputStream(destFile).use { output -> input.copyTo(output) }
@@ -256,69 +262,29 @@ class CapivaraPlugin : Plugin() {
 
     @PluginMethod
     fun sendInput(call: PluginCall) {
-        val button = call.getInt("button") ?: return
-        val isPressed = call.getBoolean("isPressed") ?: return
+        val button = call.getInt("button") ?: 0
+        val isPressed = call.getBoolean("isPressed") ?: false
         CapivaraEngine.sendInput(0, button, isPressed)
         call.resolve()
     }
 
     @PluginMethod
-    fun takeScreenshot(call: PluginCall) {
-        try {
-            val pixels = CapivaraEngine.getFramebufferPixels()
-                ?: run { call.reject("Framebuffer empty"); return }
-            val res = CapivaraEngine.getFramebufferResolution()
-            val w = res[0]; val h = res[1]; val fmt = res[2]
-
-            val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
-            val px = IntArray(w * h)
-            when (fmt) {
-                2 -> { // XRGB8888
-                    for (i in 0 until w * h) {
-                        val b = i * 4
-                        val r = pixels[b + 2].toInt() and 0xFF
-                        val g = pixels[b + 1].toInt() and 0xFF
-                        val blue = pixels[b].toInt() and 0xFF
-                        px[i] = android.graphics.Color.rgb(r, g, blue)
-                    }
-                }
-                1 -> { // RGB565
-                    for (i in 0 until w * h) {
-                        val b = i * 2
-                        val raw = ((pixels[b + 1].toInt() and 0xFF) shl 8) or (pixels[b].toInt() and 0xFF)
-                        val r = (raw and 0xF800) shr 8
-                        val g = (raw and 0x07E0) shr 3
-                        val blue = (raw and 0x001F) shl 3
-                        px[i] = android.graphics.Color.rgb(r, g, blue)
-                    }
-                }
-                else -> { // 0RGB1555 fallback
-                    for (i in 0 until w * h) {
-                        val b = i * 2
-                        val raw = ((pixels[b + 1].toInt() and 0xFF) shl 8) or (pixels[b].toInt() and 0xFF)
-                        val r = (raw and 0x7C00) shr 7
-                        val g = (raw and 0x03E0) shr 2
-                        val blue = (raw and 0x001F) shl 3
-                        px[i] = android.graphics.Color.rgb(r, g, blue)
-                    }
-                }
-            }
-            bmp.setPixels(px, 0, w, 0, 0, w, h)
-
-            val screenshotDir = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES), "CapivaraEmu")
-            screenshotDir.mkdirs()
-            val ts = System.currentTimeMillis()
-            val outFile = File(screenshotDir, "screenshot_$ts.jpg")
-            java.io.FileOutputStream(outFile).use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
-
-            val ret = JSObject()
-            ret.put("path", outFile.absolutePath)
-            call.resolve(ret)
-        } catch (e: Exception) {
-            Log.e(TAG, "Screenshot failed: ${e.message}", e)
-            call.reject("Screenshot failed: ${e.message}")
-        }
+    fun sendAnalog(call: PluginCall) {
+        val port = call.getInt("port") ?: 0
+        val stick = call.getInt("stick") ?: 0 // 0 = left, 1 = right
+        val x = call.getFloat("x") ?: 0f
+        val y = call.getFloat("y") ?: 0f
+        
+        // Convert -1.0..1.0 float to INT16 (-32767..32767)
+        val xShort = (x * 32767).toInt().toShort()
+        val yShort = (y * 32767).toInt().toShort()
+        
+        // libretro IDs: 0 = X, 1 = Y
+        CapivaraEngine.sendAnalogInput(port, stick, 0, xShort)
+        CapivaraEngine.sendAnalogInput(port, stick, 1, yShort)
+        call.resolve()
     }
+
 
     @PluginMethod
     fun pickBiosFile(call: PluginCall) {
@@ -427,6 +393,54 @@ class CapivaraPlugin : Plugin() {
         }
     }
 
+    private fun getRealPathFromUri(uri: Uri): String? {
+        val uriStr = uri.toString()
+
+        // Legacy format: content://...primary%3A...
+        if (uriStr.contains("primary%3A") || uriStr.contains("primary:")) {
+            val decoded = Uri.decode(uriStr)
+            val pathPart = decoded.substringAfterLast("primary:").trimStart('/')
+            return "/storage/emulated/0/$pathPart"
+        }
+
+        // DocumentsContract format (Android 5.0+ SAF)
+        try {
+            if (android.provider.DocumentsContract.isDocumentUri(context, uri)) {
+                val docId = android.provider.DocumentsContract.getDocumentId(uri)
+                val split = docId.split(":")
+                val storageType = split.getOrNull(0) ?: return null
+                val relPath = split.getOrNull(1) ?: return null
+
+                if (storageType.equals("primary", ignoreCase = true)) {
+                    return "/storage/emulated/0/$relPath"
+                } else {
+                    // External SD: storageType is the UUID (e.g. "1234-ABCD")
+                    return "/storage/$storageType/$relPath"
+                }
+            }
+        } catch (e: Exception) {
+            udpLog("DocumentsContract path resolve failed: ${e.message}")
+        }
+
+        // Last resort: try content query for _data column
+        try {
+            val cursor = context.contentResolver.query(uri, arrayOf("_data"), null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val colIdx = it.getColumnIndex("_data")
+                    if (colIdx >= 0) {
+                        val path = it.getString(colIdx)
+                        if (!path.isNullOrBlank()) return path
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            udpLog("Content query for _data failed: ${e.message}")
+        }
+
+        return null
+    }
+
     private fun copyRomToCache(uriString: String, originalFileName: String, coreFileName: String): String? {
         udpLog("copyRomToCache called for $originalFileName")
         try {
@@ -456,22 +470,38 @@ class CapivaraPlugin : Plugin() {
 
             val uri = Uri.parse(uriString)
 
-            val isLargeIsoCore = coreFileName.contains("nethersx2") || coreFileName.contains("play") || coreFileName.contains("ppsspp")
+            val isLargeIsoCore = coreFileName.contains("nethersx2") || coreFileName.contains("ppsspp") || coreFileName.contains("play")
             if (isLargeIsoCore) {
+                // Market Standard: Use absolute path if MANAGE_EXTERNAL_STORAGE is granted
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && android.os.Environment.isExternalStorageManager()) {
+                    val realPath = getRealPathFromUri(uri)
+                    if (realPath != null && File(realPath).exists()) {
+                        udpLog("Using absolute path directly (All Files Access): $realPath")
+                        return realPath
+                    }
+                }
+
                 udpLog("Opening FileDescriptor for Zero-Copy...")
                 activeRomFd = context.contentResolver.openFileDescriptor(uri, "r")
                 if (activeRomFd != null) {
                     val fd = activeRomFd!!.fd
                     val fdPath = "/proc/self/fd/$fd"
-                    udpLog("Using Zero-Copy FD path for large ISO: $fdPath")
-                    return fdPath
+                    try {
+                        android.system.Os.symlink(fdPath, cacheFile.absolutePath)
+                        udpLog("Using Zero-Copy symlink for large ISO: ${cacheFile.absolutePath} -> $fdPath")
+                        return cacheFile.absolutePath
+                    } catch (e: Exception) {
+                        udpLog("Symlink failed (${e.message}), falling back to FD path: $fdPath")
+                        return fdPath
+                    }
                 } else {
                     udpLog("openFileDescriptor returned null!")
                 }
             }
 
             // Stream Copy real
-            if (originalFileName.lowercase().endsWith(".zip") && !isMame) {
+            val isFbneo = coreFileName.contains("fbneo")
+            if (originalFileName.lowercase().endsWith(".zip") && !isMame && !isFbneo) {
                 udpLog("ZIP detected for non-MAME core. Extracting first file...")
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     ZipInputStream(input).use { zis ->
@@ -607,4 +637,118 @@ class CapivaraPlugin : Plugin() {
         CastingServer.stop()
         call.resolve()
     }
+
+    @PluginMethod
+    fun requestAllFilesAccess(call: PluginCall) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (!android.os.Environment.isExternalStorageManager()) {
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.addCategory("android.intent.category.DEFAULT")
+                    intent.data = Uri.parse("package:${context.packageName}")
+                    startActivityForResult(call, intent, "allFilesAccessResult")
+                } catch (e: Exception) {
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    startActivityForResult(call, intent, "allFilesAccessResult")
+                }
+            } else {
+                call.resolve(JSObject().put("granted", true))
+            }
+        } else {
+            call.resolve(JSObject().put("granted", true))
+        }
+    }
+
+    @ActivityCallback
+    private fun allFilesAccessResult(call: PluginCall?, result: ActivityResult) {
+        if (call == null) return
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val granted = android.os.Environment.isExternalStorageManager()
+            call.resolve(JSObject().put("granted", granted))
+        } else {
+            call.resolve(JSObject().put("granted", true))
+        }
+    }
+
+    // ── setVideoFilter ─────────────────────────────────────────────────────────
+    // filter values: 0=Sharp(Nearest), 1=Smooth(Bilinear), 2=CRT, 3=LCD
+    @PluginMethod
+    fun setVideoFilter(call: PluginCall) {
+        val filter = call.getInt("filter") ?: 0
+        CapivaraEngine.setVideoFilter(filter)
+        udpLog("setVideoFilter: $filter")
+        call.resolve()
+    }
+
+    // ── takeScreenshot ─────────────────────────────────────────────────────────
+    // Reads raw RGBA pixels from JNI, encodes to JPEG 75%, saves to Pictures/CapivaraEmu
+    // and returns the base64 thumbnail (for SaveState cards).
+    @PluginMethod
+    fun takeScreenshot(call: PluginCall) {
+        execute {
+            try {
+                val pixels = CapivaraEngine.captureFramePixels()
+                val res    = CapivaraEngine.getVideoResolution()
+
+                if (pixels == null || res == null || res.size < 2) {
+                    call.reject("empty")
+                    return@execute
+                }
+
+                val width  = res[0]
+                val height = res[1]
+
+                if (width <= 0 || height <= 0) {
+                    call.reject("empty")
+                    return@execute
+                }
+
+                // Create Bitmap from RGBA8888 pixel array
+                val unsignedPixels = pixels.map { it.toInt() and 0xFF }.toIntArray()
+                val argbPixels = IntArray(width * height)
+                for (i in argbPixels.indices) {
+                    val r = unsignedPixels[i * 4 + 0]
+                    val g = unsignedPixels[i * 4 + 1]
+                    val b = unsignedPixels[i * 4 + 2]
+                    argbPixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                }
+
+                val bmp = android.graphics.Bitmap.createBitmap(argbPixels, width, height,
+                    android.graphics.Bitmap.Config.ARGB_8888)
+
+                // Save full-res JPEG to Pictures/CapivaraEmu
+                val picturesDir = android.os.Environment.getExternalStoragePublicDirectory(
+                    android.os.Environment.DIRECTORY_PICTURES)
+                val capDir = java.io.File(picturesDir, "CapivaraEmu")
+                capDir.mkdirs()
+                val fileName = "screenshot_${System.currentTimeMillis()}.jpg"
+                val file = java.io.File(capDir, fileName)
+                FileOutputStream(file).use { out ->
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                }
+
+                // Create small thumbnail (320×240) as base64 for SaveState cards
+                val thumbW = 320
+                val thumbH = (320.0 * height / width).toInt().coerceAtLeast(1)
+                val thumbBmp = android.graphics.Bitmap.createScaledBitmap(bmp, thumbW, thumbH, true)
+                val thumbOut = java.io.ByteArrayOutputStream()
+                thumbBmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, thumbOut)
+                val thumbBase64 = android.util.Base64.encodeToString(
+                    thumbOut.toByteArray(), android.util.Base64.NO_WRAP)
+
+                bmp.recycle()
+                thumbBmp.recycle()
+
+                udpLog("Screenshot saved: ${file.absolutePath}")
+                call.resolve(JSObject()
+                    .put("path", file.absolutePath)
+                    .put("thumbnailBase64", "data:image/jpeg;base64,$thumbBase64"))
+
+            } catch (e: Exception) {
+                udpLog("takeScreenshot error: ${e.message}")
+                call.reject("Screenshot failed: ${e.message}")
+            }
+        }
+    }
 }
+

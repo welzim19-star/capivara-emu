@@ -5,6 +5,9 @@
 
 #include "engine_globals.h"
 #include <chrono>
+#include "adapters/CoreAdapterFactory.h"
+
+std::unique_ptr<ICoreAdapter> g_coreAdapter = nullptr;
 
 void GameLoop() {
     // ── 1. Wait for Android Surface (up to 5 s) ───────────────────────────────
@@ -43,13 +46,16 @@ void GameLoop() {
          (void*)g_eglDisplay, (void*)g_eglSurface, (void*)g_eglContext);
 
     // ── 3. core.init() — MUST run on THIS thread ──────────────────────────────
-    if (g_corePath.find("play_libretro") != std::string::npos) {
-        LOGI("Applying Play! core workaround: mapping EXTERNAL_STORAGE to internal system dir");
-        setenv("EXTERNAL_STORAGE", g_systemDir.c_str(), 1);
-    }
+    g_coreAdapter = CoreAdapterFactory::getAdapter(g_corePath, g_systemDir);
+    g_coreAdapter->injectVariables();
+
     LOGI("Calling core.init()...");
     if (core.init) core.init();
     LOGI("core.init() completed.");
+
+    if (core.set_controller_port_device) {
+        g_coreAdapter->setupControllerPorts(core.set_controller_port_device);
+    }
 
     // ── 4. HW Render context_reset (if applicable during init) ───────────────
     bool contextResetFired = false;
@@ -172,8 +178,9 @@ void GameLoop() {
 
         auto end     = std::chrono::high_resolution_clock::now();
         int  elapsed = (int)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        if (elapsed < frameTimeUs)
+        if (elapsed < frameTimeUs && !g_fastForward.load()) {
             std::this_thread::sleep_for(std::chrono::microseconds(frameTimeUs - elapsed));
+        }
     }
 
     LOGI("GameLoop: run loop exited — tearing down.");

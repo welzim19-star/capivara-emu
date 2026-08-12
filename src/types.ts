@@ -11,6 +11,23 @@ export interface TenantInfo {
   biosRequired: boolean;
   biosFile?: string;
   tectoySpecial?: boolean;
+  gamepadStyle?: GamepadStyle;
+}
+
+export interface GamepadButtonTheme {
+  colorClass: string;
+  label: string;
+  shapeClass?: string;
+}
+
+export interface GamepadStyle {
+  type: '2-button' | '4-button' | '6-button';
+  top?: GamepadButtonTheme;
+  left?: GamepadButtonTheme;
+  right?: GamepadButtonTheme;
+  bottom?: GamepadButtonTheme;
+  l1?: GamepadButtonTheme;
+  r1?: GamepadButtonTheme;
 }
 
 export interface GameItem {
@@ -66,6 +83,9 @@ export interface CoreConfigTemplate {
   aspectRatio?: AspectRatio;
   graphicsApi?: GraphicsAPI;
   vSync?: boolean;
+  videoFilter?: 'Bilinear' | 'Pixel Perfect';
+  capivara_shader?: string;
+  showFPS?: boolean;
   
   // PS2 (AetherSX2 / Play!) Específicos
   internalResolution?: number; // 1, 2, 3, 4, 8
