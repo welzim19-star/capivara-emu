@@ -21,4 +21,9 @@ export interface EnginePort {
   loadState(slot: number, hash: string): Promise<void>;
   onLogStream(callback: (log: string) => void): void;
   stopLogStream(): Promise<void>;
+  
+  // Cheats
+  resetCheats(): Promise<void>;
+  applyCheat(index: number, enabled: boolean, code: string): Promise<void>;
+  sendAnalog(port: number, stick: number, x: number, y: number): Promise<void>;
 }

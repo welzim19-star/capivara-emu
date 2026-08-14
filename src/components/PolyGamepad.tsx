@@ -78,15 +78,15 @@ export const SNESGamepad: React.FC<{ onEmit: EmitBtn }> = ({ onEmit }) => {
   );
   return (
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
-      <DPad onEmit={onEmit} style={{ bottom: 52, left: 24, pointerEvents: 'auto' as any }} />
-      <div style={{ position: 'absolute', bottom: 52, right: 24, width: 120, height: 120, pointerEvents: 'auto' }}>
+
+      <div style={{ position: 'absolute', bottom: 52, right: 32, width: 150, height: 150, pointerEvents: 'auto' }}>
         {face(1, 'Y', 'rgba(124,58,237,0.75)', '#A78BFA', { top: '50%', left: 0, transform: 'translateY(-50%)' })}
         {face(8, 'A', 'rgba(220,38,38,0.75)',  '#FCA5A5', { top: '50%', right: 0, transform: 'translateY(-50%)' })}
         {face(9, 'X', 'rgba(37,99,235,0.75)',  '#93C5FD', { top: 0, left: '50%', transform: 'translateX(-50%)' })}
         {face(0, 'B', 'rgba(22,163,74,0.75)',  '#86EFAC', { bottom: 0, left: '50%', transform: 'translateX(-50%)' })}
       </div>
-      {bump(10, 'L', { bottom: 188, left: 24, pointerEvents: 'auto' })}
-      {bump(11, 'R', { bottom: 188, right: 24, pointerEvents: 'auto' })}
+      {bump(10, 'L1', { bottom: 220, left: 32, pointerEvents: 'auto' })}
+      {bump(11, 'R1', { bottom: 220, right: 32, pointerEvents: 'auto' })}
       <StartSelect onEmit={onEmit} accent="#8B5CF6" />
     </div>
   );
@@ -107,7 +107,7 @@ export const MegaDriveGamepad: React.FC<{ onEmit: EmitBtn }> = ({ onEmit }) => {
   ];
   return (
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
-      <DPad onEmit={onEmit} style={{ bottom: 60, left: 24, pointerEvents: 'auto' as any }} />
+
       <div style={{ position: 'absolute', bottom: 36, right: 12, pointerEvents: 'auto' }}>
         {rows.map((row, ri) => (
           <div key={ri} style={{ display: 'flex', gap: 8, marginBottom: ri === 0 ? 8 : 0, marginLeft: ri === 0 ? 10 : 0 }}>
@@ -159,7 +159,7 @@ export const N64Gamepad: React.FC<{ onEmit: EmitBtn; onAxis: EmitAxis }> = ({ on
   ];
   return (
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
-      <DPad onEmit={onEmit} style={{ bottom: 60, left: 24, pointerEvents: 'auto' as any }} />
+
 
       {/* Z Trigger */}
       <button
@@ -232,6 +232,45 @@ export const N64Gamepad: React.FC<{ onEmit: EmitBtn; onAxis: EmitAxis }> = ({ on
           style={{ background: 'rgba(22,163,74,0.3)', border: '1px solid rgba(22,163,74,0.7)', color: '#86EFAC', userSelect: 'none' }}>
           START
         </button>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ARCADE (MAME / NEOGEO) — Classic Curved Layout
+// ═══════════════════════════════════════════════════════════════════════════
+export const ArcadeGamepad: React.FC<{ onEmit: EmitBtn; sixButton?: boolean }> = ({ onEmit, sixButton = false }) => {
+  const btn = (id: number, label: string, color: string, pos: React.CSSProperties) => (
+    <button key={id}
+      onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); haptic(25); onEmit(0, id, true); }}
+      onPointerUp={() => onEmit(0, id, false)}
+      onPointerLeave={() => onEmit(0, id, false)}
+      onPointerCancel={() => onEmit(0, id, false)}
+      className="absolute flex items-center justify-center rounded-full font-black text-white select-none touch-none active:scale-95 transition-transform shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+      style={{ width: 56, height: 56, background: color, border: '3px solid rgba(255,255,255,0.2)', userSelect: 'none', ...pos }}>
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', bottom: 60, right: 30, width: 220, height: 160, pointerEvents: 'auto' }}>
+        {/* Row 1 */}
+        {btn(9, sixButton ? 'X' : 'C', 'rgba(37,99,235,0.9)', { bottom: 80, right: 150 })}
+        {btn(1, sixButton ? 'Y' : 'D', 'rgba(124,58,237,0.9)', { bottom: 100, right: 80 })}
+        {sixButton && btn(11, 'R1', 'rgba(234,88,12,0.9)', { bottom: 100, right: 10 })}
+
+        {/* Row 2 */}
+        {btn(8, sixButton ? 'A' : 'A', 'rgba(220,38,38,0.9)', { bottom: 10, right: 160 })}
+        {btn(0, sixButton ? 'B' : 'B', 'rgba(234,179,8,0.9)', { bottom: 30, right: 90 })}
+        {sixButton && btn(10, 'L1', 'rgba(22,163,74,0.9)', { bottom: 30, right: 20 })}
+      </div>
+      
+      {/* Coin / Start in Arcade are usually Select / Start */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-4 flex gap-8" style={{ pointerEvents: 'auto' }}>
+        <button onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); haptic(18); onEmit(0, 2, true); }} onPointerUp={() => onEmit(0, 2, false)} onPointerLeave={() => onEmit(0, 2, false)} onPointerCancel={() => onEmit(0, 2, false)} className="px-4 py-2 bg-red-600/30 border border-red-500/50 text-red-300 font-bold text-xs tracking-widest rounded-full">COIN</button>
+        <button onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); haptic(18); onEmit(0, 3, true); }} onPointerUp={() => onEmit(0, 3, false)} onPointerLeave={() => onEmit(0, 3, false)} onPointerCancel={() => onEmit(0, 3, false)} className="px-4 py-2 bg-green-600/30 border border-green-500/50 text-green-300 font-bold text-xs tracking-widest rounded-full">START</button>
       </div>
     </div>
   );

@@ -41,14 +41,11 @@ export const PlayStoreHub: React.FC<PlayStoreHubProps> = ({
     SNES_SNES9X: true,
     GENESIS_GENPLUSGX: true,
     GBA_MGBA: true,
-    GBC_GAMBATTE: true,
     PS1_PCSX: true,
     PS2_NETHERSX2: true,
     N64_MUPEN64PLUS: true,
     MAME_2003PLUS: true,
-    NEOGEO_FBNEO: true,
-    PSP_PPSSPP: true,
-    MASTERSYSTEM_PICODRIVE: true
+    NEOGEO_FBNEO: true
   });
 
   const [activeTab, setActiveTab] = useState<'compatibility' | 'monetization' | 'apk_pipeline'>('compatibility');

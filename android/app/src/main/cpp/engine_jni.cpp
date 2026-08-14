@@ -12,6 +12,9 @@ bool loadCore(const char* path) {
         dlclose(g_core_handle);
         g_core_handle = nullptr;
     }
+    
+    // GALVANIC ISOLATION: Purge variables from previous core
+    g_core_options.clear();
 
     g_hw_render_active = false;
     core = {};  // Zero all function pointers
@@ -43,6 +46,8 @@ bool loadCore(const char* path) {
     BIND_SYM(get_memory_data)
     BIND_SYM(get_memory_size)
     BIND_SYM(set_controller_port_device)
+    BIND_SYM(cheat_reset)
+    BIND_SYM(cheat_set)
 #undef BIND_SYM
 
     // Register our callbacks. set_environment MUST come before set_video/audio/input
@@ -240,6 +245,24 @@ Java_com_capivaraemu_studio_CapivaraEngine_getFramebufferResolution(JNIEnv* env,
     jint res[3] = { (jint)g_video_width, (jint)g_video_height, (jint)g_pixel_format };
     env->SetIntArrayRegion(result, 0, 3, res);
     return result;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_resetCheats(JNIEnv*, jobject) {
+    if (core.cheat_reset) {
+        LOGI("JNI: cheat_reset called");
+        core.cheat_reset();
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_applyCheat(JNIEnv* env, jobject, jint index, jboolean enabled, jstring code) {
+    if (core.cheat_set) {
+        const char* codeCStr = env->GetStringUTFChars(code, nullptr);
+        LOGI("JNI: applying cheat %d -> %s (enabled: %d)", index, codeCStr, enabled);
+        core.cheat_set((unsigned)index, enabled, codeCStr);
+        env->ReleaseStringUTFChars(code, codeCStr);
+    }
 }
 
 // ── JNI: Input ────────────────────────────────────────────────────────────────

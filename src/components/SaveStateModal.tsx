@@ -54,20 +54,20 @@ export const SaveStateModal: React.FC<Props> = ({ tenant, game, mode, onSelectSl
 
   return (
     <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center z-[120] backdrop-blur-md">
-      <div className="bg-zinc-950 border border-indigo-900/50 p-6 rounded-2xl w-[90%] max-w-4xl shadow-2xl flex flex-col h-[85%] max-h-[700px]">
+      <div className="bg-zinc-950 border border-indigo-900/50 p-4 md:p-6 rounded-2xl w-[95%] max-w-4xl shadow-2xl flex flex-col h-[90%] max-h-[600px]">
         
-        <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/10 shrink-0">
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-white/10 shrink-0">
           <div>
-            <h2 className="text-white font-black text-2xl tracking-wider">
+            <h2 className="text-white font-black text-xl tracking-wider">
               {mode === 'save' ? '💾 SAVE STATE' : '📂 LOAD STATE'}
             </h2>
-            <p className="text-indigo-400 text-xs font-mono uppercase">{game.title}</p>
+            <p className="text-indigo-400 text-[10px] font-mono uppercase">{game.title}</p>
           </div>
           <button onClick={onClose} className="text-white/50 hover:text-white font-black text-xl">✕</button>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {slots.map((s) => {
               const save = saves[s.id];
               const isEmpty = !save;
@@ -105,15 +105,15 @@ export const SaveStateModal: React.FC<Props> = ({ tenant, game, mode, onSelectSl
                   </div>
 
                   {/* Info Area */}
-                  <div className="p-3 bg-zinc-900 border-t border-white/5">
+                  <div className="p-2 bg-zinc-900 border-t border-white/5">
                     {isEmpty ? (
-                      <p className="text-white/40 text-xs text-center font-bold py-2">Vazio</p>
+                      <p className="text-white/40 text-[10px] text-center font-bold py-1">Vazio</p>
                     ) : (
                       <div className="flex flex-col space-y-1">
-                        <span className="text-white/90 text-sm font-bold truncate">{save.timestamp}</span>
+                        <span className="text-white/90 text-[10px] md:text-xs font-bold truncate">{save.timestamp}</span>
                         <div className="flex justify-between items-center">
-                          <span className="text-indigo-400 text-[10px] font-mono">HASH: {save.hash}</span>
-                          <span className="text-white/40 text-[10px] font-mono">{save.dataSizeKb}KB</span>
+                          <span className="text-indigo-400 text-[8px] font-mono truncate">HASH: {save.hash}</span>
+                          <span className="text-white/40 text-[8px] font-mono ml-1">{save.dataSizeKb}KB</span>
                         </div>
                       </div>
                     )}
@@ -133,8 +133,8 @@ export const SaveStateModal: React.FC<Props> = ({ tenant, game, mode, onSelectSl
           </div>
         </div>
 
-        <div className="mt-6 pt-4 border-t border-white/10 flex justify-end shrink-0">
-          <button onClick={onClose} className="px-6 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition">Voltar</button>
+        <div className="mt-4 pt-3 border-t border-white/10 flex justify-end shrink-0">
+          <button onClick={onClose} className="px-5 py-1.5 text-sm rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition">Voltar</button>
         </div>
       </div>
     </div>

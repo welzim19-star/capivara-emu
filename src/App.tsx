@@ -12,8 +12,22 @@ export default function App() {
   const [currentGame, setCurrentGame] = useState<GameItem | null>(null);
   const [backPressedTime, setBackPressedTime] = useState(0);
   const [showExitWarning, setShowExitWarning] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const handleGamepadConnected = (e: GamepadEvent) => {
+      setToastMessage(`🎮 Controle Conectado: ${e.gamepad.id.substring(0, 20)}...`);
+      setTimeout(() => setToastMessage(null), 3000);
+    };
+
+    const handleGamepadDisconnected = (e: GamepadEvent) => {
+      setToastMessage(`🔌 Controle Desconectado!`);
+      setTimeout(() => setToastMessage(null), 3000);
+    };
+
+    window.addEventListener("gamepadconnected", handleGamepadConnected);
+    window.addEventListener("gamepaddisconnected", handleGamepadDisconnected);
+
     let timeoutId: any;
     
     const backListener = CapacitorApp.addListener('backButton', (info) => {
@@ -41,6 +55,8 @@ export default function App() {
     return () => {
       backListener.then(l => l.remove());
       clearTimeout(timeoutId);
+      window.removeEventListener("gamepadconnected", handleGamepadConnected);
+      window.removeEventListener("gamepaddisconnected", handleGamepadDisconnected);
     };
   }, [backPressedTime]);
 
@@ -99,14 +115,21 @@ export default function App() {
             onExitToDashboard={() => setActiveTab('dashboard')}
           />
         )}
-      </main>
 
-      {/* Warning de saída do App */}
-      {showExitWarning && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-zinc-900/90 text-white px-6 py-3 rounded-full text-sm font-bold shadow-2xl z-[100] border border-white/10 animate-bounce">
-          Pressione Voltar novamente para sair
-        </div>
-      )}
+        {/* Warning de saída do App */}
+        {showExitWarning && (
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-black/90 text-white px-6 py-3 rounded-full text-sm font-bold shadow-2xl border border-white/10 z-50 animate-bounce">
+            Pressione voltar novamente para sair
+          </div>
+        )}
+
+        {/* Global Toast Notification */}
+        {toastMessage && (
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-emerald-600/90 text-white px-6 py-3 rounded-full text-sm font-bold shadow-2xl border border-emerald-400 z-50">
+            {toastMessage}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

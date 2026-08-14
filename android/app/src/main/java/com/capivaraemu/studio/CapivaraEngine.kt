@@ -33,5 +33,8 @@ object CapivaraEngine {
     external fun setVideoFilter(filter: Int)
     external fun captureFramePixels(): ByteArray?
     external fun getVideoResolution(): IntArray
+
+    external fun resetCheats()
+    external fun applyCheat(index: Int, enabled: Boolean, code: String)
 }
 

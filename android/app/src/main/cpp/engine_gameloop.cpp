@@ -153,8 +153,32 @@ void GameLoop() {
 
     const int frameTimeUs = (int)(1000000.0 / (av_info.timing.fps > 0 ? av_info.timing.fps : 60.0));
 
-    // ── 8. Main Run Loop ──────────────────────────────────────────────────────
+    // ── 8. Main Run Loop (With Rewind & Auto-Save) ────────────────────────────
     uint64_t frameCount = 0;
+    
+    // SRAM Auto-Save State
+    std::vector<uint8_t> lastSramCopy;
+    size_t sramSize = 0;
+    void* sramData = nullptr;
+    if (core.get_memory_data && core.get_memory_size && !g_sramPath.empty()) {
+        sramSize = core.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        sramData = core.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+        if (sramSize > 0 && sramData) {
+            lastSramCopy.resize(sramSize);
+            memcpy(lastSramCopy.data(), sramData, sramSize);
+        }
+    }
+
+    // Rewind Ring Buffer
+    const int REWIND_MAX_STATES = 150; // About 15 seconds if saved every 6 frames
+    std::vector<std::vector<uint8_t>> rewindBuffer;
+    int rewindIndex = 0;
+    size_t serializeSize = core.serialize_size ? core.serialize_size() : 0;
+    bool canRewind = (core.serialize && core.unserialize && serializeSize > 0 && serializeSize < 2 * 1024 * 1024);
+    if (canRewind) {
+        rewindBuffer.resize(REWIND_MAX_STATES, std::vector<uint8_t>(serializeSize));
+    }
+
     while (g_engineRunning) {
         if (g_enginePaused) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -163,22 +187,55 @@ void GameLoop() {
 
         auto start = std::chrono::high_resolution_clock::now();
 
-        if (core.run) core.run();
-        renderFrame();
+        // Check if L2 (ID 12) is held for Rewind
+        bool isRewinding = canRewind && g_input_state[12];
+
+        if (isRewinding) {
+            // Rebobinar: load previous state, skip core.run()
+            rewindIndex = (rewindIndex - 1 + REWIND_MAX_STATES) % REWIND_MAX_STATES;
+            core.unserialize(rewindBuffer[rewindIndex].data(), serializeSize);
+            // Render frame directly from memory state
+            renderFrame();
+            // Sleep slightly longer for a cool slow-motion rewind effect
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        } else {
+            // Normal execution
+            if (core.run) core.run();
+            renderFrame();
+
+            // Save state for rewind every 6 frames
+            if (canRewind && frameCount % 6 == 0) {
+                core.serialize(rewindBuffer[rewindIndex].data(), serializeSize);
+                rewindIndex = (rewindIndex + 1) % REWIND_MAX_STATES;
+            }
+        }
 
         ++frameCount;
-        // Log a heartbeat every 60 frames so we can confirm the loop is alive
+
+        // Auto-Save SRAM every 600 frames (~10 seconds)
+        if (sramSize > 0 && sramData && frameCount % 600 == 0) {
+            if (memcmp(lastSramCopy.data(), sramData, sramSize) != 0) {
+                memcpy(lastSramCopy.data(), sramData, sramSize);
+                FILE* f = fopen(g_sramPath.c_str(), "wb");
+                if (f) {
+                    fwrite(sramData, 1, sramSize, f);
+                    fclose(f);
+                    LOGI("Auto-Save SRAM flushed to disk.");
+                }
+            }
+        }
+
         if (frameCount == 1) {
             LOGI(">>> FIRST FRAME RENDERED! VideoBuffer=%zu HWRender=%d <<<",
                  g_videoBuffer.size(), (int)g_hw_render_active);
-        } else if (frameCount % 300 == 0) {
+        } else if (frameCount % 600 == 0) {
             LOGI("GameLoop heartbeat: frame=%llu videoBuffer=%zu hw=%d",
                  (unsigned long long)frameCount, g_videoBuffer.size(), (int)g_hw_render_active);
         }
 
         auto end     = std::chrono::high_resolution_clock::now();
         int  elapsed = (int)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        if (elapsed < frameTimeUs && !g_fastForward.load()) {
+        if (!isRewinding && elapsed < frameTimeUs && !g_fastForward.load()) {
             std::this_thread::sleep_for(std::chrono::microseconds(frameTimeUs - elapsed));
         }
     }
@@ -201,6 +258,14 @@ void GameLoop() {
 
     // ── 10. Teardown — all on this same thread ────────────────────────────────
     if (core.unload_game) core.unload_game();
+    
+    // ── 10. HW Render context_destroy ─────────────────────────────────────────
+    if (g_hw_render_active && g_hw_render_cb.context_destroy) {
+        LOGI("Triggering HW render context_destroy before EGL teardown...");
+        g_hw_render_cb.context_destroy();
+    }
+
+    destroyEGL();
     if (core.deinit)      core.deinit();
 
     g_audioInitialized = false;

@@ -55,6 +55,8 @@ struct RetroCoreAPI {
     void    *(*get_memory_data)(unsigned id);
     size_t   (*get_memory_size)(unsigned id);
     void     (*set_controller_port_device)(unsigned port, unsigned device);
+    void     (*cheat_reset)(void);
+    void     (*cheat_set)(unsigned index, bool enabled, const char *code);
 };
 
 // ── Audio Constants ────────────────────────────────────────────────────────────

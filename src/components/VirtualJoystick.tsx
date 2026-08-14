@@ -2,22 +2,44 @@ import React, { useRef, useState } from 'react';
 
 interface Props {
   onDirectionChange: (dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'NONE') => void;
+  onAxis?: (x: number, y: number) => void;
   className?: string;
   style?: React.CSSProperties;
   editMode?: boolean;
 }
 
-export const VirtualJoystick: React.FC<Props> = ({ onDirectionChange, className, style, editMode }) => {
+export const VirtualJoystick: React.FC<Props> = ({ onDirectionChange, onAxis, className, style, editMode }) => {
+  const [puckPos, setPuckPos] = useState({ x: 0, y: 0 });
   const [activeDir, setActiveDir] = useState<'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'NONE'>('NONE');
   const originRef = useRef<{ x: number; y: number } | null>(null);
 
-  const calculateDirection = (e: React.PointerEvent) => {
+  const calculateInput = (e: React.PointerEvent) => {
     if (!originRef.current) return;
     const dx = e.clientX - originRef.current.x;
     const dy = e.clientY - originRef.current.y;
     
-    // Deadzone
-    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
+    const maxRadius = 40; // max visual displacement for the puck
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Calculate normalized axis (-1.0 to 1.0)
+    let nx = dx / maxRadius;
+    let ny = dy / maxRadius;
+    
+    if (distance > maxRadius) {
+      nx = dx / distance;
+      ny = dy / distance;
+    }
+    
+    // Visual puck pos
+    setPuckPos({ x: nx * maxRadius, y: ny * maxRadius });
+
+    // Emit analog
+    if (onAxis) {
+      onAxis(nx, ny);
+    }
+
+    // Deadzone for D-Pad
+    if (distance < 15) {
       if (activeDir !== 'NONE') {
         setActiveDir('NONE');
         onDirectionChange('NONE');
@@ -25,6 +47,7 @@ export const VirtualJoystick: React.FC<Props> = ({ onDirectionChange, className,
       return;
     }
 
+    // Calculate D-Pad direction
     let newDir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' = 'NONE' as any;
     if (Math.abs(dx) > Math.abs(dy)) {
       newDir = dx > 0 ? 'RIGHT' : 'LEFT';
@@ -38,41 +61,49 @@ export const VirtualJoystick: React.FC<Props> = ({ onDirectionChange, className,
     }
   };
 
+  const reset = () => {
+    originRef.current = null;
+    setPuckPos({ x: 0, y: 0 });
+    if (onAxis) onAxis(0, 0);
+    if (activeDir !== 'NONE') {
+      setActiveDir('NONE');
+      onDirectionChange('NONE');
+    }
+  };
+
   return (
     <div
-      className={`absolute w-40 h-40 bg-white/10 rounded-full flex items-center justify-center border border-white/20 shadow-2xl backdrop-blur-md ${editMode ? 'ring-4 ring-cyan-500 cursor-move' : 'touch-none'} ${className || ''}`}
-      style={style}
+      className={`absolute w-36 h-36 bg-white/10 rounded-full flex items-center justify-center border-2 border-white/20 shadow-2xl backdrop-blur-md ${editMode ? 'ring-4 ring-cyan-500 cursor-move' : 'touch-none'} ${className || ''}`}
+      style={{ pointerEvents: editMode ? 'auto' : 'auto', ...style }}
       onPointerDown={(e) => {
         if (editMode) return;
         e.currentTarget.setPointerCapture(e.pointerId);
         originRef.current = { x: e.clientX, y: e.clientY };
-        calculateDirection(e);
+        calculateInput(e);
       }}
       onPointerMove={(e) => {
         if (editMode) return;
         if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-          calculateDirection(e);
+          calculateInput(e);
         }
       }}
       onPointerUp={(e) => {
         if (editMode) return;
         e.currentTarget.releasePointerCapture(e.pointerId);
-        originRef.current = null;
-        if (activeDir !== 'NONE') {
-          setActiveDir('NONE');
-          onDirectionChange('NONE');
-        }
+        reset();
       }}
       onPointerCancel={(e) => {
         if (editMode) return;
-        originRef.current = null;
-        if (activeDir !== 'NONE') {
-          setActiveDir('NONE');
-          onDirectionChange('NONE');
-        }
+        reset();
       }}
     >
-      <div className={`w-12 h-12 bg-black/40 rounded-full transition-all duration-100 pointer-events-none ${activeDir === 'UP' ? '-translate-y-8' : activeDir === 'DOWN' ? 'translate-y-8' : activeDir === 'LEFT' ? '-translate-x-8' : activeDir === 'RIGHT' ? 'translate-x-8' : ''}`} />
+      <div className="absolute w-2 h-2 bg-white/30 rounded-full pointer-events-none" />
+      <div 
+        className="w-14 h-14 bg-black/50 border border-white/30 rounded-full transition-none pointer-events-none shadow-lg backdrop-blur-md flex items-center justify-center"
+        style={{ transform: `translate(${puckPos.x}px, ${puckPos.y}px)` }}
+      >
+        <div className="w-6 h-6 bg-white/10 rounded-full" />
+      </div>
     </div>
   );
 };

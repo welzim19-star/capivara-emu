@@ -168,59 +168,16 @@ class CapivaraPlugin : Plugin() {
         }
         val configStr = sb.toString()
 
-        val internalSystemDir = File(context.filesDir, "system").also { it.mkdirs() }
-        val internalSaveDir   = File(context.filesDir, "saves").also  { it.mkdirs() }
+        val sysDir = File(context.getExternalFilesDir(null), "system/bios")
+        sysDir.mkdirs()
+        
+        // Assegurar que a pasta do Play! existe para o PS2
+        File(sysDir, "Play Data").mkdirs()
+        
+        val saveDir = File(context.getExternalFilesDir(null), "saves")
+        saveDir.mkdirs()
 
-        if (!biosFileUriStr.isNullOrEmpty() && !biosFileName.isNullOrEmpty()) {
-            try {
-                val sysUri = Uri.parse(biosFileUriStr)
-                var targetDir = internalSystemDir
-                val targetName = if (coreName.contains("play") || coreName.contains("nethersx2")) {
-                    targetDir = File(internalSystemDir, "bios").also { it.mkdirs() }
-                    "scph39001.bin"
-                } else {
-                    biosFileName
-                }
-                val destFile = File(targetDir, targetName)
-                
-                context.contentResolver.openInputStream(sysUri)?.use { input ->
-                    FileOutputStream(destFile).use { output -> input.copyTo(output) }
-                }
-                Log.i(TAG, "Copied single BIOS file to system dir as: $targetName")
-
-                if (coreName.contains("mame") || coreName.contains("fbneo")) {
-                    val cacheDestFile = File(context.cacheDir, targetName)
-                    context.contentResolver.openInputStream(sysUri)?.use { input ->
-                        FileOutputStream(cacheDestFile).use { output -> input.copyTo(output) }
-                    }
-                    Log.i(TAG, "Also copied BIOS file to cacheDir for MAME/FBNeo: $targetName")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not copy single BIOS file: ${e.message}")
-            }
-        }
-
-        // MAME/FBNeo: Shadow Copy neogeo.zip directly from the ROM directory if present
-        if (coreName.contains("mame") || coreName.contains("fbneo")) {
-            if (!romPathUriStr.isNullOrEmpty()) {
-                try {
-                    val treeUri = Uri.parse(romPathUriStr)
-                    val dir = DocumentFile.fromTreeUri(context, treeUri)
-                    val neogeoFile = dir?.findFile("neogeo.zip")
-                    if (neogeoFile != null) {
-                        val cacheDestFile = File(context.cacheDir, "neogeo.zip")
-                        context.contentResolver.openInputStream(neogeoFile.uri)?.use { input ->
-                            FileOutputStream(cacheDestFile).use { output -> input.copyTo(output) }
-                        }
-                        udpLog("Shadow Copied neogeo.zip from ROM dir to cache!")
-                    }
-                } catch(e: Exception) {
-                    udpLog("Failed to shadow copy neogeo.zip: ${e.message}")
-                }
-            }
-        }
-
-        CapivaraEngine.setSystemDirectory(internalSystemDir.absolutePath, internalSaveDir.absolutePath)
+        CapivaraEngine.setSystemDirectory(sysDir.absolutePath, saveDir.absolutePath)
 
         val corePath = ensureCoreExists(coreName)
         if (corePath == null) {
@@ -241,7 +198,7 @@ class CapivaraPlugin : Plugin() {
         CapivaraEngine.injectCoreConfiguration(configStr)
 
         val safeName = fileName.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
-        val sramPath = File(internalSaveDir, "$safeName.srm").absolutePath
+        val sramPath = File(saveDir, "$safeName.srm").absolutePath
 
         udpLog("Calling native initEngine...")
         val initSuccess = CapivaraEngine.initEngine(corePath)
@@ -265,6 +222,24 @@ class CapivaraPlugin : Plugin() {
         val button = call.getInt("button") ?: 0
         val isPressed = call.getBoolean("isPressed") ?: false
         CapivaraEngine.sendInput(0, button, isPressed)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun updateCoreOptions(call: PluginCall) {
+        val sb = java.lang.StringBuilder()
+        val data = call.data
+        if (data != null) {
+            val keys = data.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = data.getString(key)
+                if (value != null) {
+                    sb.append(key).append("=").append(value).append("\n")
+                }
+            }
+        }
+        CapivaraEngine.injectCoreConfiguration(sb.toString())
         call.resolve()
     }
 
@@ -547,11 +522,72 @@ class CapivaraPlugin : Plugin() {
     fun saveState(call: PluginCall) {
         val path = File(context.cacheDir, "save.state").absolutePath
         val success = CapivaraEngine.saveState(path)
-        if (success) {
-            call.resolve()
-        } else {
+        
+        if (!success) {
             call.reject("Failed to save state")
+            return
         }
+
+        // Try to capture a thumbnail for the Save State UI
+        var thumbBase64: String? = null
+        try {
+            val pixels = CapivaraEngine.captureFramePixels()
+            val res = CapivaraEngine.getVideoResolution()
+            
+            if (pixels != null && res != null && res.size >= 2 && res[0] > 0 && res[1] > 0) {
+                val width = res[0]
+                val height = res[1]
+                val unsignedPixels = pixels.map { it.toInt() and 0xFF }.toIntArray()
+                val argbPixels = IntArray(width * height)
+                for (i in argbPixels.indices) {
+                    val r = unsignedPixels[i * 4 + 0]
+                    val g = unsignedPixels[i * 4 + 1]
+                    val b = unsignedPixels[i * 4 + 2]
+                    argbPixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+                }
+                
+                val bmp = android.graphics.Bitmap.createBitmap(argbPixels, width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                val thumbW = 320
+                val thumbH = (320.0 * height / width).toInt().coerceAtLeast(1)
+                val thumbBmp = android.graphics.Bitmap.createScaledBitmap(bmp, thumbW, thumbH, true)
+                val thumbOut = java.io.ByteArrayOutputStream()
+                thumbBmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, thumbOut)
+                thumbBase64 = "data:image/jpeg;base64," + android.util.Base64.encodeToString(thumbOut.toByteArray(), android.util.Base64.NO_WRAP)
+                
+                bmp.recycle()
+                thumbBmp.recycle()
+            }
+        } catch (e: Exception) {
+            udpLog("saveState thumbnail error: ${e.message}")
+        }
+        
+        val ret = JSObject()
+        ret.put("success", true)
+        if (thumbBase64 != null) {
+            ret.put("thumbnailBase64", thumbBase64)
+        }
+        val file = File(path)
+        if (file.exists()) {
+            ret.put("dataSizeKb", file.length() / 1024)
+        }
+        
+        call.resolve(ret)
+    }
+
+    @PluginMethod
+    fun resetCheats(call: PluginCall) {
+        CapivaraEngine.resetCheats()
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun applyCheat(call: PluginCall) {
+        val index = call.getInt("index", 0)!!
+        val enabled = call.getBoolean("enabled", true)!!
+        val code = call.getString("code", "")!!
+        
+        CapivaraEngine.applyCheat(index, enabled, code)
+        call.resolve()
     }
 
     private var activeRomFd: ParcelFileDescriptor? = null

@@ -7,11 +7,12 @@ import { StatusBar } from '@capacitor/status-bar';
 import { SettingsMenu } from './SettingsMenu';
 import { VirtualJoystick } from './VirtualJoystick';
 import { netplay } from '../services/NetplayService';
+import { CheatsMenu } from './CheatsMenu';
 import { SaveStateModal } from './SaveStateModal';
 import { NetplayModal } from './NetplayModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGamepad } from '../hooks/useGamepad';
-import { SNESGamepad, MegaDriveGamepad, N64Gamepad, StartSelect } from './PolyGamepad';
+import { SNESGamepad, MegaDriveGamepad, N64Gamepad, ArcadeGamepad, StartSelect } from './PolyGamepad';
 
 const CapivaraEngine = registerPlugin<any>('CapivaraEngine');
 
@@ -26,6 +27,8 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
   const [notification, setNotification] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showNetplay, setShowNetplay] = useState(false);
+  const [relaunchTrigger, setRelaunchTrigger] = useState(0);
+  const [showCheats, setShowCheats] = useState(false);
   const [saveManagerMode, setSaveManagerMode] = useState<'save' | 'load' | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -34,6 +37,17 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
   const [logs, setLogs] = useState<string[]>([]);
   const logsEndRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const telemetryRef = useRef<HTMLDivElement | null>(null);
+
+  const [hudConfig, setHudConfig] = useState(() => {
+    const saved = localStorage.getItem(`hud_config_${tenant.id}`);
+    return saved ? JSON.parse(saved) : { opacity: 1, scale: 1 };
+  });
+
+  const saveHudConfig = (newConfig: any) => {
+    setHudConfig(newConfig);
+    localStorage.setItem(`hud_config_${tenant.id}`, JSON.stringify(newConfig));
+  };
 
   const [isGamepadActive, setIsGamepadActive] = useState(false);
   const gamepadTimeoutRef = useRef<any>(null);
@@ -49,6 +63,58 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
   const showToast = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 2500);
+  };
+
+  const autofireConfig = useRef({ buttonId: -1, speed: 15 });
+  const autofireState = useRef({ isHeld: false, intervalId: null as any });
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`autofire_${tenant.id}`);
+    if (saved) {
+      try { autofireConfig.current = JSON.parse(saved); } catch(e) {}
+    }
+    const handleAutofireUpdate = (e: any) => {
+      autofireConfig.current = e.detail;
+      if (autofireConfig.current.buttonId === -1 && autofireState.current.intervalId) {
+        clearInterval(autofireState.current.intervalId);
+        autofireState.current.intervalId = null;
+      }
+    };
+    window.addEventListener('autofire_config_updated', handleAutofireUpdate);
+    return () => window.removeEventListener('autofire_config_updated', handleAutofireUpdate);
+  }, [tenant.id]);
+
+  const emitNativeButton = async (port: number, buttonId: number, isPressed: boolean) => {
+    if (port === 0 && buttonId === autofireConfig.current.buttonId && autofireConfig.current.speed > 0) {
+      if (isPressed) {
+        if (!autofireState.current.isHeld) {
+          autofireState.current.isHeld = true;
+          CapivaraEngine.sendInput({ port, button: buttonId, isPressed: true });
+          netplay.broadcastButton(buttonId, true);
+          
+          let toggle = true;
+          const delay = 1000 / autofireConfig.current.speed;
+          autofireState.current.intervalId = setInterval(() => {
+            toggle = !toggle;
+            CapivaraEngine.sendInput({ port, button: buttonId, isPressed: toggle });
+            netplay.broadcastButton(buttonId, toggle);
+          }, delay);
+        }
+      } else {
+        autofireState.current.isHeld = false;
+        if (autofireState.current.intervalId) {
+          clearInterval(autofireState.current.intervalId);
+          autofireState.current.intervalId = null;
+        }
+        CapivaraEngine.sendInput({ port, button: buttonId, isPressed: false });
+        netplay.broadcastButton(buttonId, false);
+      }
+    } else {
+      try {
+        await CapivaraEngine.sendInput({ port, button: buttonId, isPressed });
+        if (port === 0) netplay.broadcastButton(buttonId, isPressed);
+      } catch (e) {}
+    }
   };
 
   useGamepad(
@@ -80,8 +146,9 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
 
     const launch = async () => {
       try {
-        const savedConfigStr = localStorage.getItem(`core_config_${tenant.id}`);
-        const configMatrix = savedConfigStr ? JSON.parse(savedConfigStr) : {};
+        const overrideStr = localStorage.getItem(`override_${currentGame.id}`);
+        const globalStr = localStorage.getItem(`core_config_${tenant.id}`);
+        const configMatrix = overrideStr ? JSON.parse(overrideStr) : (globalStr ? JSON.parse(globalStr) : {});
         
         // Map to libretro core options string format
         const libretroConfig: Record<string, string> = {};
@@ -94,13 +161,6 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
            if (!libretroConfig[k] && typeof v === 'string') libretroConfig[k] = v;
         });
 
-        if (tenant.coreFile.includes('play_libretro')) {
-          try {
-            await CapivaraEngine.requestAllFilesAccess();
-          } catch (e) {
-            console.warn("requestAllFilesAccess not supported or failed", e);
-          }
-        }
 
         showToast("Carregando Core Nativo C++...");
         await CapivaraEngine.startGame({ 
@@ -191,10 +251,17 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
       }
     });
 
+    const telemetryListener = CapivaraEngine.addListener('onTelemetry', (data: any) => {
+      if (telemetryRef.current && data) {
+        telemetryRef.current.innerText = `FPS: ${data.fps?.toFixed(1) || '0.0'} | EE: ${data.ee || 0}% | VU: ${data.vu || 0}% | GS: ${data.gs || 0}%`;
+      }
+    });
+
     return () => {
       backListener.then(l => l.remove());
       stateListener.then(l => l.remove());
       logListener.then(l => l.remove());
+      telemetryListener.then(l => l.remove());
       CapivaraEngine.stopLogStream().catch(console.error);
       const unlockScreen = async () => {
         try {
@@ -206,7 +273,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
       // ALWAYS kill the native engine process on exit so audio stops
       CapivaraEngine.destroyEngine().catch(console.error);
     };
-  }, [currentGame, tenant]);
+  }, [currentGame, tenant, relaunchTrigger]);
 
   useEffect(() => {
     if (showDebugLog && logsEndRef.current) {
@@ -214,12 +281,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
     }
   }, [logs, showDebugLog]);
 
-  const emitNativeButton = async (port: number, buttonId: number, isPressed: boolean) => {
-    try {
-      await CapivaraEngine.sendInput({ port, button: buttonId, isPressed });
-      if (port === 0) netplay.broadcastButton(buttonId, isPressed);
-    } catch (e) {}
-  };
+
 
   const emitAnalog = async (port: number, stick: number, x: number, y: number) => {
     try {
@@ -298,10 +360,10 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
     localStorage.setItem(`show_controls_${tenant.id}`, String(next));
   };
 
-  const is3dConsole = ['PS1_PCSX', 'PS2_NETHERSX2', 'N64_MUPEN64PLUS', 'PSP_PPSSPP'].includes(tenant.id);
+  const is3dConsole = ['PS1_PCSX', 'PS2_NETHERSX2', 'N64_MUPEN64PLUS'].includes(tenant.id);
   const is6ButtonGenesis = tenant.id === 'GENESIS_GENPLUSGX';
   const isSnesGba = ['SNES_SNES9X', 'GBA_MGBA'].includes(tenant.id);
-  const is8Bit2Button = ['MS3_TECTOY', 'MASTERSYSTEM_PICODRIVE', 'GBC_GAMBATTE'].includes(tenant.id);
+  const is8Bit2Button = ['MS3_TECTOY'].includes(tenant.id);
   const isArcade = ['MAME_2003PLUS', 'NEOGEO_FBNEO'].includes(tenant.id);
 
   return (
@@ -318,11 +380,23 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
       </div>
 
       {/* Copyright Watermark */}
-      <div className="absolute bottom-2 right-4 z-0 opacity-10 pointer-events-none">
+      <div className="absolute bottom-2 right-4 z-0 opacity-10 pointer-events-none flex flex-col items-end">
         <span className="text-white text-[10px] font-black tracking-widest drop-shadow-md">
           © PW SYSTEM APPLICATIONS
         </span>
       </div>
+
+      {/* OSD Real-time Telemetry */}
+      {is3dConsole && (
+        <div className="absolute top-2 right-4 z-30 pointer-events-none">
+          <div 
+            ref={telemetryRef} 
+            className="text-amber-400 font-mono text-[10px] font-bold bg-black/60 px-2 py-1 rounded border border-amber-500/20 shadow-lg backdrop-blur-sm"
+          >
+            FPS: --.- | EE: --% | VU: --% | GS: --%
+          </div>
+        </div>
+      )}
 
       {notification && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-cyan-500 text-black font-bold px-4 py-2 rounded-full shadow-lg text-sm animate-pulse pointer-events-none">
@@ -332,40 +406,71 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
 
       {/* Edit Mode Overlay Info */}
       {editMode && (
-        <div className="absolute top-4 left-4 z-40 bg-red-600/80 text-white font-bold px-4 py-2 rounded-lg">
-          MODO EDIÇÃO (Arraste os controles) - <button onClick={() => setEditMode(false)} className="underline">Concluir</button>
+        <div className="absolute top-4 left-4 z-40 bg-zinc-900/90 border border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.3)] text-white font-bold px-6 py-4 rounded-xl flex flex-col gap-4 backdrop-blur-md">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <span className="text-cyan-400 font-black tracking-widest text-sm">HUD EDITOR</span>
+            <button onClick={() => setEditMode(false)} className="px-4 py-1 bg-cyan-600 hover:bg-cyan-500 rounded text-xs text-white">SAVE & EXIT</button>
+          </div>
+          
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-white/70">HUD Opacity: {Math.round(hudConfig.opacity * 100)}%</label>
+            <input 
+              type="range" min="0.1" max="1" step="0.1" 
+              value={hudConfig.opacity} 
+              onChange={(e) => saveHudConfig({ ...hudConfig, opacity: parseFloat(e.target.value) })}
+              className="accent-cyan-500"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-white/70">HUD Scale: {Math.round(hudConfig.scale * 100)}%</label>
+            <input 
+              type="range" min="0.5" max="1.5" step="0.1" 
+              value={hudConfig.scale} 
+              onChange={(e) => saveHudConfig({ ...hudConfig, scale: parseFloat(e.target.value) })}
+              className="accent-cyan-500"
+            />
+          </div>
+          
+          <p className="text-[10px] text-white/40 mt-2">Arraste os clusters para reposicionar (em breve)</p>
         </div>
       )}
 
         {/* Polymorphic Gamepad HUD — dispatched by console type */}
         <motion.div
-          animate={{ opacity: showControls ? 1 : 0, pointerEvents: showControls ? 'auto' : 'none' }}
+          animate={{ opacity: showControls ? hudConfig.opacity : 0, pointerEvents: showControls ? 'auto' : 'none', scale: hudConfig.scale }}
           transition={{ duration: 0.3 }}
           className="absolute inset-0 z-10 pointer-events-none overflow-hidden"
+          style={{ transformOrigin: 'center bottom' }}
         >
           {/* Left side: Joystick (all consoles) */}
           <VirtualJoystick
             editMode={editMode}
-            className="left-8 bottom-8"
+            className="left-8 bottom-12"
+            onAxis={is3dConsole ? (x, y) => emitAnalog(0, 0, x, y) : undefined}
             onDirectionChange={(dir) => {
                emitNativeButton(0, 4, false);
                emitNativeButton(0, 5, false);
                emitNativeButton(0, 6, false);
                emitNativeButton(0, 7, false);
-               if (dir === 'UP')    emitNativeButton(0, 4, true);
-               if (dir === 'DOWN')  emitNativeButton(0, 5, true);
-               if (dir === 'LEFT')  emitNativeButton(0, 6, true);
-               if (dir === 'RIGHT') emitNativeButton(0, 7, true);
+               if (!is3dConsole) {
+                 if (dir === 'UP')    emitNativeButton(0, 4, true);
+                 if (dir === 'DOWN')  emitNativeButton(0, 5, true);
+                 if (dir === 'LEFT')  emitNativeButton(0, 6, true);
+                 if (dir === 'RIGHT') emitNativeButton(0, 7, true);
+               }
             }}
           />
 
           {/* Console-specific gamepad */}
           {tenant.id === 'SNES_SNES9X' || tenant.id === 'GBA_MGBA' ? (
             <SNESGamepad onEmit={emitNativeButton} />
-          ) : tenant.id === 'GENESIS_GENPLUSGX' || tenant.id === 'MASTERSYSTEM_PICODRIVE' ? (
+          ) : tenant.id === 'GENESIS_GENPLUSGX' ? (
             <MegaDriveGamepad onEmit={emitNativeButton} />
           ) : tenant.id === 'N64_MUPEN64PLUS' ? (
             <N64Gamepad onEmit={emitNativeButton} onAxis={emitAnalog} />
+          ) : tenant.id === 'MAME_2003PLUS' || tenant.id === 'NEOGEO_FBNEO' ? (
+            <ArcadeGamepad onEmit={emitNativeButton} sixButton={tenant.id === 'MAME_2003PLUS'} />
           ) : tenant.gamepadStyle ? (
             // Legacy fallback: consoles that still use the old tenant.gamepadStyle object
             <motion.div
@@ -396,7 +501,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
           )}
 
           {/* Start/Select center — only for consoles NOT using PolyGamepad (PolyGamepad includes own Start) */}
-          {!['SNES_SNES9X', 'GBA_MGBA', 'GENESIS_GENPLUSGX', 'MASTERSYSTEM_PICODRIVE', 'N64_MUPEN64PLUS'].includes(tenant.id) && tenant.gamepadStyle && (
+          {!['SNES_SNES9X', 'GBA_MGBA', 'GENESIS_GENPLUSGX', 'N64_MUPEN64PLUS', 'MAME_2003PLUS', 'NEOGEO_FBNEO'].includes(tenant.id) && tenant.gamepadStyle && (
             <motion.div
               drag={editMode}
               dragMomentum={false}
@@ -476,6 +581,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
       {showSettings && (
         <SettingsMenu 
           tenant={tenant}
+          game={currentGame}
           onClose={() => {
             setShowSettings(false);
             CapivaraEngine.resume();
@@ -485,6 +591,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
           onOpenSaveManager={(mode) => setSaveManagerMode(mode)}
           showControls={showControls}
           onToggleControls={handleToggleControls}
+          onShowCheats={() => setShowCheats(true)}
           onTakeScreenshot={handleTakeScreenshot}
           onEditLayout={() => {
             setShowSettings(false);
@@ -501,8 +608,14 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
           }}
           onApplyConfig={async (config) => {
             try {
-              await CapivaraEngine.updateConfig({ configMatrix: config });
-              showToast("Live Config Injetada!");
+              // Usa o adapter para fazer a tradução Matrix -> Libretro Core Options
+              const { CapacitorEngineAdapter } = await import('../adapters/native/CapacitorEngineAdapter');
+              const adapter = new CapacitorEngineAdapter();
+              await adapter.setConfig(config);
+              showToast("Configuração Injetada! Reiniciando Engine...");
+              setShowSettings(false);
+              // Dispara o reload do core
+              setTimeout(() => setRelaunchTrigger(prev => prev + 1), 500);
             } catch (e) {
               console.warn("Core não suporta Live Tweak", e);
             }
@@ -535,6 +648,15 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
 
       {showNetplay && (
         <NetplayModal onClose={() => setShowNetplay(false)} />
+      )}
+
+      {showCheats && tenant && currentGame && (
+        <CheatsMenu 
+          tenantId={tenant.id}
+          gameId={currentGame.id}
+          gameTitle={currentGame.title}
+          onClose={() => setShowCheats(false)}
+        />
       )}
 
       {saveManagerMode && (

@@ -206,7 +206,7 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-white/50 space-y-4">
             <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-            <p className="font-bold">Baixando Boxarts e Meta-dados...</p>
+            <p className="font-bold">Carregando Jogos...</p>
           </div>
         ) : roms.length === 0 ? (
           <div className="text-center py-20">
@@ -263,16 +263,16 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="black"><path d="M8 5v14l11-7z"/></svg>
                     </div>
                   </div>
-                  {/* Edit Cover button (top-right corner, appears on hover) */}
+                  {/* Edit Cover button (always visible icon at bottom right) */}
                   <button
-                    className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black text-xs z-10"
-                    title="Editar Capa"
+                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-black/80 text-white flex items-center justify-center shadow-lg hover:bg-white/20 transition-all z-10 border border-white/10"
+                    title="Alterar Capa Manualmente"
                     onClick={(e) => {
                       e.stopPropagation();
                       document.getElementById(`cover-picker-${idx}`)?.click();
                     }}
                   >
-                    ✏️
+                    🖼️
                   </button>
                 </div>
                 <span className="mt-2 text-center text-xs font-bold text-white/80 group-hover:text-white truncate w-full px-1">

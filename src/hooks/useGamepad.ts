@@ -51,21 +51,19 @@ export const useGamepad = (
       for (const gp of gamepads) {
         if (!gp) continue;
         
+        const map = mapRef.current;
+        const currentFrameState: Record<number, boolean> = {};
+
         gp.buttons.forEach((btn, idx) => {
           const pressed = btn.pressed || btn.value > 0.5;
           if (pressed) {
             isActive = true;
-            // Emit raw event for InputMapper
             window.dispatchEvent(new CustomEvent('gamepad_button_raw', { detail: { buttonIndex: idx } }));
           }
 
           const libretroId = (map as any)[idx];
           if (libretroId !== undefined) {
-            const stateKey = `${gp.index}_${libretroId}`;
-            if (previousState.current[stateKey] !== pressed) {
-              onButtonChange(gp.index, libretroId, pressed);
-              previousState.current[stateKey] = pressed;
-            }
+            currentFrameState[libretroId] = currentFrameState[libretroId] || pressed;
           }
         });
         
@@ -81,11 +79,7 @@ export const useGamepad = (
           }
           const libretroId = (map as any)[axisKey];
           if (libretroId !== undefined) {
-            const stateKey = `${gp.index}_${libretroId}`;
-            if (previousState.current[stateKey] !== isPressed) {
-              onButtonChange(gp.index, libretroId, isPressed);
-              previousState.current[stateKey] = isPressed;
-            }
+            currentFrameState[libretroId] = currentFrameState[libretroId] || isPressed;
           }
         };
 
@@ -106,13 +100,21 @@ export const useGamepad = (
         handleAxisAsButton('axis_3_1',  ry > threshold);
 
         // [ISOLAMENTO GALVÂNICO] Auto-Mirror Analog -> D-PAD para jogos Retro
-        // Libretro IDs: Up(4), Down(5), Left(6), Right(7)
-        // Se a axis analógica não estiver mapeada para nada, injeta no D-Pad.
         if ((map as any)['axis_0_-1'] === undefined) {
-          if (previousState.current[`${gp.index}_6`] !== leftStickLeft) { onButtonChange(gp.index, 6, leftStickLeft); previousState.current[`${gp.index}_6`] = leftStickLeft; }
-          if (previousState.current[`${gp.index}_7`] !== leftStickRight) { onButtonChange(gp.index, 7, leftStickRight); previousState.current[`${gp.index}_7`] = leftStickRight; }
-          if (previousState.current[`${gp.index}_4`] !== leftStickUp) { onButtonChange(gp.index, 4, leftStickUp); previousState.current[`${gp.index}_4`] = leftStickUp; }
-          if (previousState.current[`${gp.index}_5`] !== leftStickDown) { onButtonChange(gp.index, 5, leftStickDown); previousState.current[`${gp.index}_5`] = leftStickDown; }
+          currentFrameState[6] = currentFrameState[6] || leftStickLeft;
+          currentFrameState[7] = currentFrameState[7] || leftStickRight;
+          currentFrameState[4] = currentFrameState[4] || leftStickUp;
+          currentFrameState[5] = currentFrameState[5] || leftStickDown;
+        }
+
+        // Emit state changes
+        for (let i = 0; i <= 15; i++) {
+          const isPressed = !!currentFrameState[i];
+          const stateKey = `${gp.index}_${i}`;
+          if (previousState.current[stateKey] !== isPressed) {
+            onButtonChange(gp.index, i, isPressed);
+            previousState.current[stateKey] = isPressed;
+          }
         }
 
         
