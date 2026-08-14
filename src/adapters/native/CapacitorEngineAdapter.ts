@@ -22,7 +22,7 @@ export class CapacitorEngineAdapter implements EnginePort {
     
     // NeoGeo (FBNeo)
     if (configMatrix.fbneo_unibios) coreSettings['fbneo-allow-patched-romsets'] = 'enabled';
-    if (configMatrix.fbneo_neogeo_mode) coreSettings['fbneo-neogeo-mode'] = configMatrix.fbneo_neogeo_mode === 'AES (Console)' ? 'AES' : 'MVS';
+    if (configMatrix.fbneo_neogeo_mode) coreSettings['fbneo-neogeo-mode'] = configMatrix.fbneo_neogeo_mode === 'AES (Console)' ? 'UNIBIOS' : 'MVS';
     if (configMatrix.fbneo_cpu_overclock) coreSettings['fbneo-cpu-speed-adjust'] = String(configMatrix.fbneo_cpu_overclock);
     
     // Arcade (MAME)

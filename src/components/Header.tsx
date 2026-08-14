@@ -38,6 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [currentTime, setCurrentTime] = useState('12:42 PM');
 
+  const [batteryLevel, setBatteryLevel] = useState(100);
+
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -55,9 +57,23 @@ export const Header: React.FC<HeaderProps> = ({
         ramUsageMb: Math.floor(240 + Math.random() * 15)
       }));
     }, 2000);
+
+    let batteryManager: any = null;
+    const updateBattery = () => {
+      if (batteryManager) setBatteryLevel(Math.round(batteryManager.level * 100));
+    };
+    if ('getBattery' in navigator) {
+      (navigator as any).getBattery().then((b: any) => {
+        batteryManager = b;
+        updateBattery();
+        batteryManager.addEventListener('levelchange', updateBattery);
+      });
+    }
+
     return () => {
       clearInterval(interval);
       clearInterval(timeInterval);
+      if (batteryManager) batteryManager.removeEventListener('levelchange', updateBattery);
     };
   }, []);
 
@@ -92,8 +108,8 @@ export const Header: React.FC<HeaderProps> = ({
 
           <div className="flex items-center space-x-2">
             <span className="text-white/60 font-bold text-xs">{currentTime}</span>
-            <div className="w-5 h-3 border border-white/40 rounded-sm relative p-0.5">
-              <div className="h-full bg-cyan-400 rounded-xs" style={{ width: '85%' }}></div>
+            <div className="w-5 h-3 border border-white/40 rounded-sm relative p-0.5" title={`Bateria: ${batteryLevel}%`}>
+              <div className="h-full bg-cyan-400 rounded-xs" style={{ width: `${batteryLevel}%` }}></div>
             </div>
           </div>
 

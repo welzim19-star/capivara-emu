@@ -81,7 +81,7 @@ export const TENANTS: TenantInfo[] = [
     gradient: 'from-indigo-700 to-purple-800',
     iconName: 'Cpu',
     biosRequired: true,
-    biosFile: 'scph60004.bin',
+    biosFile: 'scph*.bin',
     gamepadStyle: { type: '4-button', top: { colorClass: 'bg-emerald-500/80', label: '▲' }, left: { colorClass: 'bg-pink-500/80', label: '■' }, right: { colorClass: 'bg-red-500/80', label: '●' }, bottom: { colorClass: 'bg-cyan-500/80', label: '✖' }, l1: { colorClass: 'bg-zinc-600/80', label: 'L1' }, r1: { colorClass: 'bg-zinc-600/80', label: 'R1' } },
   },
   {

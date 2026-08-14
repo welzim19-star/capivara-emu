@@ -194,7 +194,7 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
                   alert("Permissão solicitada! Necessário para rodar PS2/PSP sem crash.");
                 } catch(e) {}
               }} className="px-4 py-2 bg-amber-600/80 hover:bg-amber-500 text-white text-sm font-bold rounded-lg transition">
-                ⚡ Fix Acesso (ISOs)
+                ⚡ Conceder permissão
               </button>
             )}
             <button onClick={handlePickDirectory} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-lg transition">

@@ -179,6 +179,22 @@ class CapivaraPlugin : Plugin() {
 
         CapivaraEngine.setSystemDirectory(sysDir.absolutePath, saveDir.absolutePath)
 
+        if (biosFileUriStr != null && biosFileName != null && biosFileUriStr.isNotEmpty()) {
+            udpLog("Copying BIOS file $biosFileName to sysDir...")
+            try {
+                val biosUri = Uri.parse(biosFileUriStr)
+                val destBiosFile = File(sysDir, biosFileName)
+                context.contentResolver.openInputStream(biosUri)?.use { input ->
+                    FileOutputStream(destBiosFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                udpLog("BIOS copied to: ${destBiosFile.absolutePath}")
+            } catch (e: Exception) {
+                udpLog("Failed to copy BIOS: ${e.message}")
+            }
+        }
+
         val corePath = ensureCoreExists(coreName)
         if (corePath == null) {
             udpLog("ensureCoreExists failed for $coreName")

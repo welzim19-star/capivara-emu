@@ -126,10 +126,10 @@ export const SettingsMenu: React.FC<Props> = ({
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="absolute inset-0 z-[100] flex items-center justify-center p-4"
+      className="absolute inset-0 z-[100] flex items-center justify-center"
       style={{ background: 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(5,5,10,0.95) 100%)', backdropFilter: 'blur(8px)' }}
     >
-      <div className="w-full max-w-4xl h-[90vh] bg-zinc-900/90 border border-white/10 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col">
+      <div className="w-full h-full bg-zinc-900/90 border-0 overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] flex flex-col">
         
         {/* Header (Top Bar) - Always Visible */}
         <div className="flex items-center justify-between px-6 py-4 bg-black/40 border-b border-white/5 relative overflow-hidden shrink-0">
