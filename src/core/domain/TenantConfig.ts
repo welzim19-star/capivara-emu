@@ -191,7 +191,7 @@ export const DEFAULT_THEME: ThemeConfig = {
 
 export const TENANT_ENGINE_OPTIONS: Record<string, EngineOption[]> = {
   'SNES_SNES9X': [
-    { id: 'snes9x_filter', label: 'Video Filter', description: 'Smoothing algorithm for pixel art', type: 'select', category: 'Graphics', default: 'None', options: ['None', 'Super2xSaI', 'SuperEagle', 'EPX', 'HQ2x', 'NTSC Composite'] },
+    { id: 'snes9x_filter', label: 'Video Filter', description: 'Smoothing algorithm for pixel art', type: 'select', category: 'Graphics', default: 'None', options: ['None'] },
     { id: 'snes9x_superfx_overclock', label: 'SuperFX Overclock', description: 'Boosts FPS in Star Fox and Yoshi\'s Island', type: 'slider', category: 'Advanced', default: 100, min: 100, max: 500, step: 50, unit: '%' },
     { id: 'snes9x_audio_interpolation', label: 'Audio Interpolation', description: 'Smooths out low-quality audio samples', type: 'select', category: 'Audio', default: 'Gaussian', options: ['None', 'Linear', 'Gaussian', 'Sinc'] }
   ],

@@ -19,6 +19,13 @@ const RETRO_BUTTONS = [
 export const InputMapper: React.FC<{ coreName: string, onClose: () => void }> = ({ coreName: tenantId, onClose }) => {
   const [map, setMap] = useState<Record<number, number>>(defaultMap);
   const [listeningFor, setListeningFor] = useState<number | null>(null);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const storageKey = `gamepad_map_${tenantId}`;
 
@@ -129,8 +136,8 @@ export const InputMapper: React.FC<{ coreName: string, onClose: () => void }> = 
             style={{ 
               width: layout.width, 
               height: layout.height, 
-              transform: `scale(${layout.scale})`,
-              marginBottom: `-${layout.height * (1 - layout.scale)}px` 
+              transform: `scale(${Math.min(layout.scale, (windowWidth - 40) / layout.width)})`,
+              marginBottom: `-${layout.height * (1 - Math.min(layout.scale, (windowWidth - 40) / layout.width))}px` 
             }}
           >
             {layout.elements.map(el => {

@@ -12,6 +12,9 @@ import { SaveStateModal } from './SaveStateModal';
 import { NetplayModal } from './NetplayModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGamepad } from '../hooks/useGamepad';
+import { useEngineLifecycle } from '../hooks/useEngineLifecycle';
+import { useTelemetry } from '../hooks/useTelemetry';
+import { GameHUD } from './GameHUD';
 import { SNESGamepad, MegaDriveGamepad, N64Gamepad, ArcadeGamepad, StartSelect } from './PolyGamepad';
 
 const CapivaraEngine = registerPlugin<any>('CapivaraEngine');
@@ -34,10 +37,9 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
   const [showControls, setShowControls] = useState(true);
   const [showDebugLog, setShowDebugLog] = useState(false);
   const [fastForward, setFastForward] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
-  const logsEndRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const telemetryRef = useRef<HTMLDivElement | null>(null);
+
+  const { fpsRef, batteryRef, timeRef, logs, logsEndRef, showHUD } = useTelemetry();
 
   const [hudConfig, setHudConfig] = useState(() => {
     const saved = localStorage.getItem(`hud_config_${tenant.id}`);
@@ -132,148 +134,14 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
     }
   );
 
-  useEffect(() => {
-    // Lock orientation to landscape and hide status bar
-    const lockScreen = async () => {
-      try {
-        await ScreenOrientation.lock({ orientation: 'landscape' });
-        await StatusBar.hide();
-      } catch (e) {
-        console.warn("Screen control not available");
-      }
-    };
-    lockScreen();
-
-    const launch = async () => {
-      try {
-        const overrideStr = localStorage.getItem(`override_${currentGame.id}`);
-        const globalStr = localStorage.getItem(`core_config_${tenant.id}`);
-        const configMatrix = overrideStr ? JSON.parse(overrideStr) : (globalStr ? JSON.parse(globalStr) : {});
-        
-        // Map to libretro core options string format
-        const libretroConfig: Record<string, string> = {};
-        if (configMatrix.playResMulti !== undefined) libretroConfig['play_res_multi'] = String(configMatrix.playResMulti);
-        if (configMatrix.playBilinearFiltering !== undefined) libretroConfig['play_bilinear_filtering'] = configMatrix.playBilinearFiltering ? 'enabled' : 'disabled';
-        if (configMatrix.playPresentationMode !== undefined) libretroConfig['play_presentation_mode'] = configMatrix.playPresentationMode;
-        if (configMatrix.videoFilter !== undefined) libretroConfig['capivara_video_filter'] = configMatrix.videoFilter;
-        // Merge remaining generic ones if they match exact libretro keys
-        Object.entries(configMatrix).forEach(([k, v]) => {
-           if (!libretroConfig[k] && typeof v === 'string') libretroConfig[k] = v;
-        });
-
-
-        showToast("Carregando Core Nativo C++...");
-        await CapivaraEngine.startGame({ 
-          core: tenant.coreFile,
-          romUri: currentGame.id === 'bios_boot' ? '' : currentGame.uri,
-          fileName: currentGame.fileName,
-          configMatrix: libretroConfig,
-          // Phase 1.1: Pass single BIOS file instead of system directory
-          biosFileUri: currentGame.biosFileUri ?? null,
-          biosFileName: currentGame.biosFileName ?? null,
-          romPathUri: tenant.romPathUri ?? null,
-        });
-        // FIX 0.1: Engine inicia em paused por segurança de thread.
-        // É obrigatório chamar resume() aqui para o GameLoop sair do estado
-        // de espera e começar a renderizar o primeiro frame imediatamente.
-        await CapivaraEngine.resume();
-        showToast("Jogo Iniciado no Modo Nativo!");
-        
-        // Auto-Load Slot 0 if exists
-        const storageKey = `saves_${tenant.id}_${currentGame.id}`;
-        const savedData = localStorage.getItem(storageKey);
-        const saves = savedData ? JSON.parse(savedData) : {};
-        if (saves[0]) {
-          setTimeout(async () => {
-            try {
-              await CapivaraEngine.loadState({ slot: 0, hash: currentGame.id });
-              showToast("Auto-Load: Progresso Restaurado!");
-            } catch (e) {
-              console.warn("Auto-load failed", e);
-            }
-          }, 1000); // Give the core a second to initialize
-        }
-
-      } catch (err: any) {
-        const msg = err?.message ?? String(err);
-        if (msg.startsWith('BIOS_MISSING:')) {
-          const biosFile = msg.split(':')[1];
-          showToast(`⚠️ BIOS não encontrada: ${biosFile}. Instale em Configurações do Console.`);
-        } else {
-          showToast("Erro ao processar a ROM na Engine");
-        }
-      }
-    };
-    launch();
-
-    // Intercept back button for in-game menu
-    const backListener = CapacitorApp.addListener('backButton', () => {
-      // If gamepad was active recently (e.g. they pressed B), ignore back button
-      if (Date.now() - lastGamepadActivity.current < 500) {
-        return;
-      }
-      setShowSettings(true);
-      CapivaraEngine.pause();
-    });
-
-    const stateListener = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) {
-        CapivaraEngine.resume();
-      } else {
-        CapivaraEngine.pause();
-        // Auto-Save on background
-        CapivaraEngine.saveState({ slot: 0, hash: currentGame.id }).then((result: any) => {
-          const storageKey = `saves_${tenant.id}_${currentGame.id}`;
-          const savedData = localStorage.getItem(storageKey);
-          const saves = savedData ? JSON.parse(savedData) : {};
-          saves[0] = {
-            id: `${currentGame.id}_0`,
-            gameId: currentGame.id,
-            tenantId: tenant.id,
-            slot: 0,
-            timestamp: new Date().toLocaleString(),
-            thumbnailBase64: result?.thumbnailBase64,
-            dataSizeKb: result?.dataSizeKb || 4096,
-            hash: currentGame.id
-          };
-          localStorage.setItem(storageKey, JSON.stringify(saves));
-        }).catch(() => console.warn("Auto-save failed"));
-      }
-    });
-
-    const logListener = CapivaraEngine.addListener('onLogLine', (data: any) => {
-      if (data.log) {
-        setLogs(prev => {
-          const newLogs = [...prev, data.log];
-          if (newLogs.length > 200) newLogs.shift();
-          return newLogs;
-        });
-      }
-    });
-
-    const telemetryListener = CapivaraEngine.addListener('onTelemetry', (data: any) => {
-      if (telemetryRef.current && data) {
-        telemetryRef.current.innerText = `FPS: ${data.fps?.toFixed(1) || '0.0'} | EE: ${data.ee || 0}% | VU: ${data.vu || 0}% | GS: ${data.gs || 0}%`;
-      }
-    });
-
-    return () => {
-      backListener.then(l => l.remove());
-      stateListener.then(l => l.remove());
-      logListener.then(l => l.remove());
-      telemetryListener.then(l => l.remove());
-      CapivaraEngine.stopLogStream().catch(console.error);
-      const unlockScreen = async () => {
-        try {
-          await ScreenOrientation.unlock();
-          await StatusBar.show();
-        } catch (e) {}
-      };
-      unlockScreen();
-      // ALWAYS kill the native engine process on exit so audio stops
-      CapivaraEngine.destroyEngine().catch(console.error);
-    };
-  }, [currentGame, tenant, relaunchTrigger]);
+  useEngineLifecycle({
+    tenant,
+    currentGame,
+    relaunchTrigger,
+    lastGamepadActivity,
+    onOpenSettings: () => setShowSettings(true),
+    onShowToast: showToast,
+  });
 
   useEffect(() => {
     if (showDebugLog && logsEndRef.current) {
@@ -386,17 +254,8 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
         </span>
       </div>
 
-      {/* OSD Real-time Telemetry */}
-      {is3dConsole && (
-        <div className="absolute top-2 right-4 z-30 pointer-events-none">
-          <div 
-            ref={telemetryRef} 
-            className="text-amber-400 font-mono text-[10px] font-bold bg-black/60 px-2 py-1 rounded border border-amber-500/20 shadow-lg backdrop-blur-sm"
-          >
-            FPS: --.- | EE: --% | VU: --% | GS: --%
-          </div>
-        </div>
-      )}
+      {/* OSD Real-time Telemetry / HUD */}
+      <GameHUD fpsRef={fpsRef} batteryRef={batteryRef} timeRef={timeRef} visible={showHUD} />
 
       {notification && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-cyan-500 text-black font-bold px-4 py-2 rounded-full shadow-lg text-sm animate-pulse pointer-events-none">
@@ -608,14 +467,18 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
           }}
           onApplyConfig={async (config) => {
             try {
-              // Usa o adapter para fazer a tradução Matrix -> Libretro Core Options
               const { CapacitorEngineAdapter } = await import('../adapters/native/CapacitorEngineAdapter');
               const adapter = new CapacitorEngineAdapter();
               await adapter.setConfig(config);
-              showToast("Configuração Injetada! Reiniciando Engine...");
-              setShowSettings(false);
-              // Dispara o reload do core
-              setTimeout(() => setRelaunchTrigger(prev => prev + 1), 500);
+              
+              if (['MAME_2003PLUS', 'NEOGEO_FBNEO', 'MAME_2010'].includes(tenant.id)) {
+                showToast("Configuração Injetada! Reiniciando Placa Arcade (Cold Reboot)...");
+                setShowSettings(false);
+                setTimeout(() => setRelaunchTrigger(prev => prev + 1), 500);
+              } else {
+                showToast("Configuração Injetada a Quente (On The Fly)!");
+                setShowSettings(false);
+              }
             } catch (e) {
               console.warn("Core não suporta Live Tweak", e);
             }
