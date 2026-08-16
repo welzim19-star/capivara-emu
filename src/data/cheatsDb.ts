@@ -11,6 +11,31 @@ export const CHEATS_DB: Record<string, CheatItem[]> = {
     { id: 'smw_1', name: '99 Vidas', code: 'C222-D4DD', description: 'Comece com 99 vidas' },
     { id: 'smw_2', name: 'Pulo Infinito', code: 'C22A-04D0', description: 'Pule no ar repetidas vezes' },
     { id: 'smw_3', name: 'Sempre com Capa', code: 'C225-04D0', description: 'Comece e permaneça com a capa (Feather)' },
+    { id: 'smw_4', name: 'Yoshi Sempre Cresce', code: 'C222-D4D0', description: 'Yoshi pequeno cresce com qualquer item' },
+  ],
+  
+  // Super Mario World 2: Yoshi's Island (SNES)
+  "yoshi's island": [
+    { id: 'smw2_1', name: 'Vidas Infinitas', code: 'C23B-0F5D', description: 'O contador de vidas não diminui' },
+    { id: 'smw2_2', name: 'Estrelas Infinitas (Timer)', code: 'C2E9-0F7D', description: 'O cronômetro do bebê Mario não diminui' },
+  ],
+
+  // Donkey Kong Country (SNES)
+  'donkey kong country': [
+    { id: 'dkc_1', name: 'Vidas Infinitas', code: 'C26A-47AF', description: 'O contador de vidas não diminui' },
+    { id: 'dkc_2', name: 'Comece com 99 vidas', code: '17C0-C4AD', description: 'Inicia o jogo com o número máximo de vidas' },
+  ],
+
+  // Donkey Kong Country 2: Diddy's Kong Quest (SNES)
+  'donkey kong country 2': [
+    { id: 'dkc2_1', name: 'Vidas Infinitas', code: 'C262-17DF', description: 'O contador de vidas não diminui' },
+    { id: 'dkc2_2', name: 'Moedas DK Infinitas', code: 'C2CC-3DA4', description: 'Moedas de ouro ilimitadas' },
+  ],
+
+  // Donkey Kong Country 3: Dixie Kong's Double Trouble (SNES)
+  'donkey kong country 3': [
+    { id: 'dkc3_1', name: 'Vidas Infinitas', code: 'C262-170F', description: 'O contador de vidas não diminui' },
+    { id: 'dkc3_2', name: 'Pulo Duplo (Dixie/Kiddy)', code: 'C2B2-17DF', description: 'Pulo infinito no ar' },
   ],
   
   // Sonic The Hedgehog (Mega Drive)
@@ -18,6 +43,32 @@ export const CHEATS_DB: Record<string, CheatItem[]> = {
     { id: 'sth_1', name: 'Invencibilidade', code: 'AT3T-CA4W', description: 'Sonic nunca perde os anéis (exceto em buracos)' },
     { id: 'sth_2', name: 'Modo Debug', code: 'AE2T-CABE', description: 'Ativa o modo de construção/debug' },
     { id: 'sth_3', name: 'Tempo Infinito', code: 'AT3T-CA4C', description: 'O cronômetro para aos 9:59' },
+  ],
+
+  // Sonic 3 (Mega Drive)
+  'sonic 3': [
+    { id: 'sth3_1', name: 'Vidas Infinitas', code: 'AW7T-CA4W', description: 'As vidas não diminuem' },
+    { id: 'sth3_2', name: 'Pulo Duplo (Shields)', code: 'ACTT-CA4C', description: 'Mantém escudo permanente' },
+  ],
+  'sonic the hedgehog 3': [
+    { id: 'sth3_1', name: 'Vidas Infinitas', code: 'AW7T-CA4W', description: 'As vidas não diminuem' },
+    { id: 'sth3_2', name: 'Pulo Duplo (Shields)', code: 'ACTT-CA4C', description: 'Mantém escudo permanente' },
+  ],
+
+  // Sonic & Knuckles (Mega Drive)
+  'sonic & knuckles': [
+    { id: 'sthak_1', name: 'Invencibilidade', code: 'RHJA-A6T4', description: 'Nunca perde os anéis' },
+    { id: 'sthak_2', name: 'Super Sonic (50 Anéis)', code: 'RGKA-A6TY', description: 'Transforma-se instantaneamente' },
+  ],
+
+  // Sonic 3 & Knuckles (Mega Drive)
+  'sonic 3 & knuckles': [
+    { id: 'sth3ak_1', name: 'Vidas Infinitas', code: 'JW7T-CA4W', description: 'As vidas não diminuem' },
+    { id: 'sth3ak_2', name: 'Super/Hyper Form Fácil', code: 'RGKA-A6TY', description: 'Precisa apenas de 1 anel para se transformar' },
+  ],
+  'sonic the hedgehog 3 & knuckles': [
+    { id: 'sth3ak_1', name: 'Vidas Infinitas', code: 'JW7T-CA4W', description: 'As vidas não diminuem' },
+    { id: 'sth3ak_2', name: 'Super/Hyper Form Fácil', code: 'RGKA-A6TY', description: 'Precisa apenas de 1 anel para se transformar' },
   ],
 
   // Metal Slug (NeoGeo / Arcade)

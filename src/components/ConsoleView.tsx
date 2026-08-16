@@ -98,15 +98,18 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
   // Phase 1.1: BIOS File Picker
   const handlePickBiosFile = async () => {
     try {
+      if (tenant.id === 'PS2_NETHERSX2' || tenant.id === 'PSP_PPSSPP') {
+        try { await CapivaraEngine.requestAllFilesAccess(); } catch(e) {}
+      }
       const result = await CapivaraEngine.pickBiosFile();
-      if (result?.uri) {
+      if (result && result.uri) {
         localStorage.setItem(`bios_file_uri_${tenant.id}`, result.uri);
         localStorage.setItem(`bios_file_name_${tenant.id}`, result.name);
         setBiosFileUri(result.uri);
         setBiosFileName(result.name);
       }
     } catch (e) {
-      console.log("Cancelado ou erro ao selecionar arquivo de BIOS", e);
+      console.warn("Failed to pick bios file", e);
     }
   };
 
@@ -187,16 +190,6 @@ export function ConsoleView({ tenant, onBack, onLaunchGame }: Props) {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-bold text-white/80">Biblioteca</h3>
           <div className="flex items-center gap-3">
-            {tenant.id === 'PS2_NETHERSX2' && (
-              <button onClick={async () => {
-                try {
-                  await CapivaraEngine.requestAllFilesAccess();
-                  alert("Permissão solicitada! Necessário para rodar PS2/PSP sem crash.");
-                } catch(e) {}
-              }} className="px-4 py-2 bg-amber-600/80 hover:bg-amber-500 text-white text-sm font-bold rounded-lg transition">
-                ⚡ Conceder permissão
-              </button>
-            )}
             <button onClick={handlePickDirectory} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-lg transition">
               {mappedDir ? 'Alterar Pasta' : 'Mapear Pasta de ROMs'}
             </button>

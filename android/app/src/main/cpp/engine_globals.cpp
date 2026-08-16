@@ -11,6 +11,8 @@ std::atomic<bool>            g_engineRunning(false);
 std::atomic<bool>            g_audioInitialized(false);
 std::atomic<bool>            g_fastForward{false};
 std::atomic<bool>            g_bilinearFilter{true};
+std::atomic<int>             g_frameSkip{0};
+std::atomic<float>           g_currentFps{0.0f};
 std::thread                  g_gameThread;
 std::mutex                   g_inputMutex;
 std::unordered_map<std::string, std::string> g_core_options;
@@ -55,14 +57,22 @@ std::condition_variable      g_audioCv;
 
 // ── Video Buffer ──────────────────────────────────────────────────────────────
 std::mutex                   g_videoMutex;
+std::mutex                   g_coreMutex;
 std::vector<uint8_t>         g_videoBuffer;
 bool                         g_videoFrameReady       = false;
+
+// HW Screenshot Sync
+std::atomic<bool>            g_screenshotRequest{false};
+std::vector<uint8_t>         g_screenshotBuffer;
+std::mutex                   g_screenshotMutex;
+std::condition_variable      g_screenshotCv;
 
 // ── GameLoop State ──────────────────────────────────────────────────────────────
 std::string                  g_romPath;
 std::string                  g_sramPath;
 int16_t                      g_analog_state[2][2] = {{0}};
 std::atomic<bool>            g_enginePaused(false);
+std::atomic<bool>            g_surfaceChanged(false);
 JavaVM*                      g_javaVM = nullptr;
 
 // ── Audio Resampler ───────────────────────────────────────────────────────────

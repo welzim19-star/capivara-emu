@@ -3,6 +3,8 @@ import { registerPlugin } from '@capacitor/core';
 
 const CapivaraEngine = registerPlugin<any>('CapivaraEngine');
 
+import { Device } from '@capacitor/device';
+
 export function useTelemetry() {
   const fpsRef = useRef<HTMLSpanElement>(null);
   const batteryRef = useRef<HTMLSpanElement>(null);
@@ -31,23 +33,18 @@ export function useTelemetry() {
     });
 
     // 2. Browser/Device Battery API
-    let batteryManager: any = null;
-    const updateBattery = () => {
-      if (batteryManager && batteryRef.current) {
-        const level = Math.round(batteryManager.level * 100);
-        batteryRef.current.innerText = `🔋 ${level}%`;
+    const updateBattery = async () => {
+      try {
+        const info = await Device.getBatteryInfo();
+        if (batteryRef.current && info.batteryLevel !== undefined) {
+          const level = Math.round(info.batteryLevel * 100);
+          batteryRef.current.innerText = `🔋 ${level}%`;
+        }
+      } catch (e) {
+        if (batteryRef.current) batteryRef.current.innerText = '🔋 ---%';
       }
     };
-
-    if ('getBattery' in navigator) {
-      (navigator as any).getBattery().then((b: any) => {
-        batteryManager = b;
-        updateBattery();
-        batteryManager.addEventListener('levelchange', updateBattery);
-      });
-    } else {
-      if (batteryRef.current) batteryRef.current.innerText = '🔋 100%';
-    }
+    updateBattery();
 
     // 3. Clock Timer
     const updateClock = () => {
@@ -65,9 +62,6 @@ export function useTelemetry() {
       logListener.then((l: any) => l.remove());
       CapivaraEngine.stopLogStream().catch(console.error);
       clearInterval(clockInterval);
-      if (batteryManager) {
-        batteryManager.removeEventListener('levelchange', updateBattery);
-      }
     };
   }, []);
 

@@ -18,12 +18,15 @@ object CapivaraEngine {
     external fun sendAnalogInput(port: Int, index: Int, id: Int, value: Short)
     external fun pause()
     external fun resume()
+    external fun setFastForward(enabled: Boolean)
+    external fun setFrameSkip(skip: Int)
     external fun destroyEngine()
     external fun saveState(path: String): Boolean
     external fun loadState(path: String): Boolean
     
     external fun getFramebufferPixels(): ByteArray?
     external fun getFramebufferResolution(): IntArray
+    external fun getCurrentFPS(): Float
 
     // Phase 1.1: BIOS / System Directory injection
     external fun setSystemDirectory(systemDir: String, saveDir: String)

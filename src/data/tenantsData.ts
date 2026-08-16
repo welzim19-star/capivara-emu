@@ -11,9 +11,15 @@ export const TENANTS: TenantInfo[] = [
     color: '#E53E3E',
     gradient: 'from-red-600 to-amber-600',
     iconName: 'Tv',
+    emojiIcon: '📺',
     biosRequired: false,
     tectoySpecial: true,
     gamepadStyle: { type: '2-button', bottom: { colorClass: 'bg-red-700/80', label: '1' }, right: { colorClass: 'bg-red-700/80', label: '2' } },
+    heroImage: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80',
+    games: [
+      { id: 'ms3-1', title: 'Alex Kidd in Miracle World', tenantId: 'MS3_TECTOY', fileName: '', fileSize: '128 KB', crc32: '', boxArtUrl: '', rating: 4.8, releaseYear: '1986', genre: 'Platformer', isFavorite: false, banner: 'from-cyan-600 to-blue-900' },
+      { id: 'ms3-2', title: 'Sonic the Hedgehog', tenantId: 'MS3_TECTOY', fileName: '', fileSize: '256 KB', crc32: '', boxArtUrl: '', rating: 4.9, releaseYear: '1991', genre: 'Platformer', isFavorite: true, banner: 'from-blue-600 to-indigo-900' }
+    ]
   },
   {
     id: 'SNES_SNES9X',
@@ -25,8 +31,15 @@ export const TENANTS: TenantInfo[] = [
     color: '#8B5CF6',
     gradient: 'from-purple-600 to-indigo-600',
     iconName: 'Gamepad2',
+    emojiIcon: '👾',
     biosRequired: false,
     gamepadStyle: { type: '4-button', top: { colorClass: 'bg-blue-600/80', label: 'X' }, left: { colorClass: 'bg-green-600/80', label: 'Y' }, right: { colorClass: 'bg-red-600/80', label: 'A' }, bottom: { colorClass: 'bg-yellow-500/80 text-black', label: 'B' } },
+    heroImage: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80',
+    games: [
+      { id: 'snes-1', title: 'Super Mario World', tenantId: 'SNES_SNES9X', fileName: '', fileSize: '512 KB', crc32: '', boxArtUrl: '', rating: 4.9, releaseYear: '1990', genre: 'Platformer', isFavorite: true, plays: '48.5k', banner: 'from-emerald-600 to-teal-900' },
+      { id: 'snes-2', title: 'Chrono Trigger', tenantId: 'SNES_SNES9X', fileName: '', fileSize: '4.0 MB', crc32: '', boxArtUrl: '', rating: 5.0, releaseYear: '1995', genre: 'JRPG', isFavorite: true, plays: '32.1k', banner: 'from-amber-600 to-purple-900' },
+      { id: 'snes-3', title: 'Donkey Kong Country', tenantId: 'SNES_SNES9X', fileName: '', fileSize: '4.0 MB', crc32: '', boxArtUrl: '', rating: 4.8, releaseYear: '1994', genre: 'Platformer', isFavorite: false, plays: '29.4k', banner: 'from-yellow-700 to-emerald-950' }
+    ]
   },
   {
     id: 'GENESIS_GENPLUSGX',
@@ -38,8 +51,14 @@ export const TENANTS: TenantInfo[] = [
     color: '#2563EB',
     gradient: 'from-blue-600 to-cyan-600',
     iconName: 'Zap',
+    emojiIcon: '⚡',
     biosRequired: false,
     gamepadStyle: { type: '4-button', left: { colorClass: 'bg-zinc-800/80', label: 'A' }, bottom: { colorClass: 'bg-zinc-800/80', label: 'B' }, right: { colorClass: 'bg-zinc-800/80', label: 'C' } },
+    heroImage: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?auto=format&fit=crop&w=1200&q=80',
+    games: [
+      { id: 'gen-1', title: 'Sonic the Hedgehog 2', tenantId: 'GENESIS_GENPLUSGX', fileName: '', fileSize: '1.0 MB', crc32: '', boxArtUrl: '', rating: 4.9, releaseYear: '1992', genre: 'Platformer', isFavorite: true, plays: '41.2k', banner: 'from-blue-600 to-indigo-950' },
+      { id: 'gen-2', title: 'Streets of Rage 2', tenantId: 'GENESIS_GENPLUSGX', fileName: '', fileSize: '2.0 MB', crc32: '', boxArtUrl: '', rating: 4.8, releaseYear: '1992', genre: 'Beat em Up', isFavorite: true, plays: '27.9k', banner: 'from-purple-800 to-zinc-950' }
+    ]
   },
   {
     id: 'GBA_MGBA',
@@ -51,6 +70,7 @@ export const TENANTS: TenantInfo[] = [
     color: '#059669',
     gradient: 'from-emerald-600 to-teal-600',
     iconName: 'Smartphone',
+    emojiIcon: '📱',
     biosRequired: false,
     biosFile: 'gba_bios.bin (optional)',
     gamepadStyle: { type: '4-button', bottom: { colorClass: 'bg-gray-400/80 text-black', label: 'B' }, right: { colorClass: 'bg-gray-400/80 text-black', label: 'A' }, l1: { colorClass: 'bg-zinc-600/80', label: 'L' }, r1: { colorClass: 'bg-zinc-600/80', label: 'R' } },
@@ -58,32 +78,23 @@ export const TENANTS: TenantInfo[] = [
 
   {
     id: 'PS1_PCSX',
-    name: 'PCSX-Re',
-    subtitle: 'PlayStation 3D Polygon',
-    coreName: 'PCSX ReARMed',
+    name: 'DuckStation / PCSX',
+    subtitle: 'PlayStation 32-Bit 3D Hardware Accelerated',
+    coreName: 'PCSX ReARMed / DuckStation',
     coreFile: 'pcsx_rearmed_libretro_android.so',
-    extensions: ['cue', 'bin', 'chd', 'pbp'],
+    extensions: ['cue', 'bin', 'chd', 'pbp', 'iso'],
     color: '#0284C7',
     gradient: 'from-sky-600 to-blue-700',
     iconName: 'Disc',
-    biosRequired: false,
-    biosFile: 'scph5501.bin (Recommended)',
-    gamepadStyle: { type: '4-button', top: { colorClass: 'bg-emerald-500/80', label: '▲' }, left: { colorClass: 'bg-pink-500/80', label: '■' }, right: { colorClass: 'bg-red-500/80', label: '●' }, bottom: { colorClass: 'bg-cyan-500/80', label: '✖' }, l1: { colorClass: 'bg-zinc-600/80', label: 'L1' }, r1: { colorClass: 'bg-zinc-600/80', label: 'R1' } },
-  },
-  {
-    id: 'PS2_NETHERSX2',
-    name: 'AetherPlay2',
-    subtitle: 'NetherSX2 Vulkan JIT Engine',
-    coreName: 'NetherSX2 / Play!',
-    coreFile: 'play_libretro_android.so',
-    extensions: ['iso', 'chd', 'cso', 'bin'],
-    color: '#4338CA',
-    gradient: 'from-indigo-700 to-purple-800',
-    iconName: 'Cpu',
     biosRequired: true,
-    biosFile: 'scph*.bin',
+    biosFile: 'scph5501.bin / scph1001.bin / scph7001.bin',
     gamepadStyle: { type: '4-button', top: { colorClass: 'bg-emerald-500/80', label: '▲' }, left: { colorClass: 'bg-pink-500/80', label: '■' }, right: { colorClass: 'bg-red-500/80', label: '●' }, bottom: { colorClass: 'bg-cyan-500/80', label: '✖' }, l1: { colorClass: 'bg-zinc-600/80', label: 'L1' }, r1: { colorClass: 'bg-zinc-600/80', label: 'R1' } },
+    heroImage: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80',
+    games: [
+      { id: 'psx-1', title: 'Metal Gear Solid', tenantId: 'PS1_PCSX', fileName: '', fileSize: '700 MB', crc32: '', boxArtUrl: '', rating: 5.0, releaseYear: '1998', genre: 'Stealth Action', isFavorite: true, plays: '55.1k', banner: 'from-slate-800 to-zinc-950' }
+    ]
   },
+
   {
     id: 'N64_MUPEN64PLUS',
     name: 'Mupen64-NX',
@@ -95,6 +106,7 @@ export const TENANTS: TenantInfo[] = [
     gradient: 'from-green-600 to-emerald-700',
     iconName: 'Box',
     biosRequired: false,
+    heroImage: 'https://images.unsplash.com/photo-1616423640778-28d1b53229bd?auto=format&fit=crop&w=1200&q=80',
     gamepadStyle: { type: '4-button', bottom: { colorClass: 'bg-blue-600/80', label: 'A' }, right: { colorClass: 'bg-green-600/80', label: 'B' }, top: { colorClass: 'bg-yellow-400/80 text-black', label: 'C-U' }, left: { colorClass: 'bg-yellow-400/80 text-black', label: 'C-L' }, l1: { colorClass: 'bg-zinc-700/80', label: 'Z' }, r1: { colorClass: 'bg-zinc-700/80', label: 'R' } },
   },
   {
@@ -109,21 +121,46 @@ export const TENANTS: TenantInfo[] = [
     iconName: 'Joystick',
     biosRequired: true,
     biosFile: 'neogeo.zip / arcade samples',
+    heroImage: 'https://images.unsplash.com/photo-1552820728-8b83bb6b773f?auto=format&fit=crop&w=1200&q=80',
     gamepadStyle: { type: '6-button', top: { colorClass: 'bg-red-600/80', label: 'X' }, left: { colorClass: 'bg-blue-600/80', label: 'Y' }, right: { colorClass: 'bg-green-600/80', label: 'B' }, bottom: { colorClass: 'bg-yellow-500/80 text-black', label: 'A' }, l1: { colorClass: 'bg-purple-600/80', label: 'L' }, r1: { colorClass: 'bg-orange-600/80', label: 'R' } },
   },
   {
     id: 'NEOGEO_FBNEO',
-    name: 'FBNeo-X',
-    subtitle: 'FinalBurn Neo 24-Meg',
-    coreName: 'FBNeo',
+    name: 'FBNeo (MVS/AES)',
+    subtitle: 'SNK NeoGeo Arcade & Home Console 24-Meg',
+    coreName: 'FinalBurn Neo',
     coreFile: 'fbneo_libretro_android.so',
-    extensions: ['zip'],
+    extensions: ['zip', '7z', 'neo'],
     color: '#EA580C',
     gradient: 'from-orange-600 to-red-600',
     iconName: 'Flame',
     biosRequired: true,
-    biosFile: 'neogeo.zip',
+    biosFile: 'neogeo.zip (Arcade / Console)',
+    heroImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=80',
     gamepadStyle: { type: '4-button', bottom: { colorClass: 'bg-red-600/80', label: 'B' }, right: { colorClass: 'bg-yellow-500/80 text-black', label: 'A' }, top: { colorClass: 'bg-blue-600/80', label: 'C' }, left: { colorClass: 'bg-green-600/80', label: 'D' } },
+  },
+  {
+    id: 'DREAMCAST_FLYCAST',
+    name: 'Dreamcast (Flycast)',
+    subtitle: 'Sega 128-Bit 3D Arcade NAOMI Engine',
+    coreName: 'Flycast (GLES3)',
+    coreFile: 'flycast_libretro_android.so',
+    extensions: ['chd', 'cdi', 'gdi', 'cue', 'zip'],
+    color: '#F97316',
+    gradient: 'from-orange-500 to-amber-600',
+    iconName: 'Disc',
+    biosRequired: true,
+    biosFile: 'dc_boot.bin / dc_flash.bin (system/dc/)',
+    heroImage: 'https://images.unsplash.com/photo-1605901309584-818e25960b8f?auto=format&fit=crop&w=1200&q=80',
+    gamepadStyle: { 
+      type: '4-button', 
+      top: { colorClass: 'bg-yellow-400/90 text-black font-bold', label: 'Y' }, 
+      left: { colorClass: 'bg-blue-600/90 text-white font-bold', label: 'X' }, 
+      right: { colorClass: 'bg-red-600/90 text-white font-bold', label: 'B' }, 
+      bottom: { colorClass: 'bg-emerald-500/90 text-black font-bold', label: 'A' }, 
+      l1: { colorClass: 'bg-zinc-700/80', label: 'L' }, 
+      r1: { colorClass: 'bg-zinc-700/80', label: 'R' } 
+    },
   }
 ];
 

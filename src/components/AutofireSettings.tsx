@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { TenantInfo } from '../types';
-import { TENANT_THEMES, DEFAULT_THEME } from '../core/domain/TenantConfig';
 
 interface Props {
   tenant: TenantInfo;
@@ -10,15 +9,13 @@ interface Props {
 }
 
 export const AutofireSettings: React.FC<Props> = ({ tenant, onClose, onSave }) => {
-  const theme = TENANT_THEMES[tenant.id] || DEFAULT_THEME;
-  const storageKey = `autofire_${tenant.id}`;
-  
+  const storageKey = `capy_autofire_${tenant.id}`;
   const [config, setConfig] = useState({ buttonId: -1, speed: 15 });
 
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
-      try { setConfig(JSON.parse(saved)); } catch(e) {}
+      try { setConfig(JSON.parse(saved)); } catch (e) {}
     }
   }, [storageKey]);
 
@@ -29,70 +26,132 @@ export const AutofireSettings: React.FC<Props> = ({ tenant, onClose, onSave }) =
   };
 
   const buttons = [
-    { id: -1, label: 'Desativado' },
-    { id: 0, label: 'Botão B (Retro)' },
-    { id: 1, label: 'Botão Y (Retro)' },
-    { id: 8, label: 'Botão A (Retro)' },
-    { id: 9, label: 'Botão X (Retro)' },
-    { id: 10, label: 'L1' },
-    { id: 11, label: 'R1' },
-    { id: 12, label: 'L2' },
-    { id: 13, label: 'R2' }
+    { id: -1, label: 'Desativado (Normal)' },
+    { id: 0, label: 'Botão B / Cross (Ação)' },
+    { id: 1, label: 'Botão Y / Square (Ataque)' },
+    { id: 8, label: 'Botão A / Circle (Especial)' },
+    { id: 9, label: 'Botão X / Triangle (Tiro)' },
+    { id: 10, label: 'L1 (Gatilho Esquerdo)' },
+    { id: 11, label: 'R1 (Gatilho Direito)' },
+    { id: 12, label: 'L2 (Turbo Extra)' },
+    { id: 13, label: 'R2 (Turbo Extra)' }
   ];
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className={`w-full max-w-md bg-zinc-900 border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col`}>
-        
-        <div className={`px-4 py-3 border-b border-white/10 flex justify-between items-center bg-black/40 shrink-0`}>
-          <div>
-            <h2 className={`text-lg font-black ${theme.accentColor}`}>Turbo Engine</h2>
-            <p className="text-white/40 text-[9px] font-mono uppercase">Configuração de Autofire</p>
-          </div>
-          <button onClick={onClose} className="text-white/50 hover:text-white font-black text-xl">✕</button>
-        </div>
-
-        <div className="p-6 flex flex-col gap-6">
-          <div className="bg-black/20 p-4 rounded-xl border border-white/5">
-            <label className={`block text-xs font-bold ${theme.accentColor} mb-2`}>Botão Alvo</label>
-            <select 
-              value={config.buttonId} 
-              onChange={(e) => setConfig({ ...config, buttonId: Number(e.target.value) })}
-              className="w-full bg-black/60 border border-white/10 rounded-lg p-2.5 text-white font-bold text-sm outline-none focus:border-current transition-colors"
-              style={{ borderColor: config.buttonId !== -1 ? theme.accentColor : undefined }}
-            >
-              {buttons.map(b => (
-                <option key={b.id} value={b.id}>{b.label}</option>
-              ))}
-            </select>
-            <p className="text-[10px] text-white/40 mt-2 font-mono uppercase">Qual botão será metralhado automaticamente ao ser pressionado.</p>
-          </div>
-
-          <div className="bg-black/20 p-4 rounded-xl border border-white/5" style={{ opacity: config.buttonId === -1 ? 0.3 : 1, pointerEvents: config.buttonId === -1 ? 'none' : 'auto' }}>
-            <label className="flex justify-between text-xs mb-2">
-              <span className={`font-bold ${theme.accentColor}`}>Velocidade (Tiros por seg)</span>
-              <span className="font-mono text-white/80 font-bold">{config.speed} Hz</span>
-            </label>
-            <input 
-              type="range" 
-              min={5} max={30} step={5} 
-              value={config.speed} 
-              onChange={(e) => setConfig({ ...config, speed: Number(e.target.value) })} 
-              className="w-full h-1.5 accent-current" 
-              style={{ color: theme.accentColor.replace('text-', '') }}
-            />
-            <div className="flex justify-between mt-1 px-1">
-              <span className="text-[9px] text-white/30">Lento (5)</span>
-              <span className="text-[9px] text-white/30">Rápido (30)</span>
+    <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0 }} 
+        animate={{ opacity: 1 }} 
+        exit={{ opacity: 0 }} 
+        className="fixed inset-0 z-[110] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+      >
+        <motion.div 
+          initial={{ scale: 0.95 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0.95 }}
+          className="w-full max-h-[95vh] overflow-y-auto max-w-md bg-zinc-950 border-2 border-amber-500/40 rounded-3xl shadow-2xl flex flex-col"
+          style={{ boxShadow: '0 0 30px -5px rgba(245, 158, 11, 0.4)' }}
+        >
+          
+          {/* Modal Header */}
+          <div className="px-6 py-4 border-b border-amber-500/20 flex justify-between items-center bg-black/50 shrink-0">
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 flex items-center justify-center text-black font-black text-lg">
+                ⚡
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 uppercase tracking-wide">
+                  Turbo Engine Gold
+                </h2>
+                <p className="text-amber-400/80 text-[10px] font-mono uppercase">Configuração de Autofire • {tenant.name}</p>
+              </div>
             </div>
+
+            <button 
+              onClick={onClose} 
+              className="w-8 h-8 rounded-lg bg-zinc-900 border border-amber-500/30 text-amber-400 font-black transition-all flex items-center justify-center hover:scale-105"
+            >
+              ✕
+            </button>
           </div>
 
-          <div className="flex gap-3 mt-2">
-            <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs uppercase tracking-widest transition-all">Cancelar</button>
-            <button onClick={handleSave} className="flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest text-white transition-all shadow-lg hover:scale-105 active:scale-95" style={{ background: theme.accentColor }}>Ativar Turbo</button>
+          {/* Modal Body */}
+          <div className="p-6 flex-1 space-y-5 overflow-y-auto custom-scrollbar">
+            
+            {/* Target Button Selector */}
+            <div className="bg-zinc-900/80 p-4 rounded-2xl border border-white/10 space-y-2">
+              <label className="block text-xs font-bold text-amber-400 uppercase font-mono">Botão de Disparo Turbo</label>
+              <select 
+                value={config.buttonId} 
+                onChange={(e) => setConfig({ ...config, buttonId: Number(e.target.value) })}
+                className="w-full bg-black border border-amber-500/40 rounded-xl p-3 text-white font-bold text-xs outline-none focus:border-amber-400 transition-colors"
+              >
+                {buttons.map(b => (
+                  <option key={b.id} value={b.id}>{b.label}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-zinc-400 font-mono">
+                Selecione qual botão responderá com repetição automática contínua.
+              </p>
+            </div>
+
+            {/* Speed Slider */}
+            <div 
+              className="bg-zinc-900/80 p-4 rounded-2xl border border-white/10 space-y-3 transition-opacity"
+              style={{ opacity: config.buttonId === -1 ? 0.4 : 1, pointerEvents: config.buttonId === -1 ? 'none' : 'auto' }}
+            >
+              <div className="flex justify-between items-center text-xs font-mono">
+                <span className="font-bold text-amber-400 uppercase">Velocidade de Disparo</span>
+                <span className="font-black text-black bg-amber-400 px-2.5 py-0.5 rounded-full text-xs">{config.speed} Hz</span>
+              </div>
+
+              <input 
+                type="range" 
+                min={5} 
+                max={30} 
+                step={5} 
+                value={config.speed} 
+                onChange={(e) => setConfig({ ...config, speed: Number(e.target.value) })} 
+                className="w-full h-2 accent-amber-400 rounded-lg cursor-pointer bg-zinc-800" 
+              />
+
+              <div className="flex justify-between text-[10px] font-mono text-zinc-500">
+                <span>5 Hz (Modarado)</span>
+                <span>15 Hz (Padrão)</span>
+                <span>30 Hz (Ultra Turbo)</span>
+              </div>
+            </div>
+
+            {/* Dynamic Hz Speed Preview Visualizer */}
+            {config.buttonId !== -1 && (
+              <div className="bg-black/60 p-3 rounded-xl border border-amber-500/30 flex items-center justify-between text-xs font-mono">
+                <span className="text-zinc-400">Frequência em execução:</span>
+                <div className="flex space-x-1 items-center">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" style={{ animationDuration: `${1 / config.speed}s` }}></span>
+                  <span className="text-amber-300 font-bold">{config.speed} Disparos / Seg</span>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Buttons */}
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={onClose} 
+                className="flex-1 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs uppercase font-mono border border-white/10 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleSave} 
+                className="flex-1 py-3 rounded-xl font-extrabold text-xs uppercase font-mono text-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 shadow-xl shadow-amber-500/25 hover:scale-105 active:scale-95 transition-all"
+              >
+                Ativar Turbo Gold
+              </button>
+            </div>
+
           </div>
-        </div>
-      </div>
-    </motion.div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };

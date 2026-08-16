@@ -12,6 +12,15 @@ export interface TenantInfo {
   biosFile?: string;
   tectoySpecial?: boolean;
   gamepadStyle?: GamepadStyle;
+  // Dynamic fields
+  games?: GameItem[];
+  emojiIcon?: string;
+  year?: string;
+  icon?: string;
+  originalConsole?: string;
+  cpu?: string;
+  res?: string;
+  heroImage?: string;
 }
 
 export interface GamepadButtonTheme {
@@ -48,6 +57,15 @@ export interface GameItem {
   // Phase 1.1: Single BIOS File Support
   biosFileUri?: string;
   biosFileName?: string;
+  
+  // Phase 20: Scraper Data
+  name?: string; // fallback
+  size?: string;
+  plays?: string;
+  banner?: string;
+  heroImage?: string;
+  coverUrl?: string;
+  year?: string;
 }
 
 export interface SaveStateItem {
@@ -101,6 +119,7 @@ export interface CoreConfigTemplate {
   // SNES Específicos
   mode7Filtering?: boolean;
   dspAudioEnhancement?: boolean;
+  snes9xFilter?: string; // HQ2x, SuperEagle, etc.
 
   // N64 Específicos
   rdpPlugin?: 'GlideN64' | 'Angrylion' | 'Parallel';

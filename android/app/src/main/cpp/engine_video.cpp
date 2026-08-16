@@ -168,13 +168,38 @@ void setup_hw_fbo() {
 }
 
 // ── EGL Teardown ──────────────────────────────────────────────────────────────
+void recreateEGLSurface() {
+    if (g_eglDisplay == EGL_NO_DISPLAY || !g_window || g_eglContext == EGL_NO_CONTEXT) return;
+    
+    if (g_eglSurface != EGL_NO_SURFACE) {
+        eglMakeCurrent(g_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        eglDestroySurface(g_eglDisplay, g_eglSurface);
+        g_eglSurface = EGL_NO_SURFACE;
+    }
+
+    const EGLint attribs[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+        EGL_BLUE_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_RED_SIZE, 8,
+        EGL_DEPTH_SIZE, 24, EGL_STENCIL_SIZE, 8,
+        EGL_NONE
+    };
+    EGLConfig config;
+    EGLint numConfigs;
+    eglChooseConfig(g_eglDisplay, attribs, &config, 1, &numConfigs);
+
+    g_eglSurface = eglCreateWindowSurface(g_eglDisplay, config, g_window, nullptr);
+    if (eglMakeCurrent(g_eglDisplay, g_eglSurface, g_eglSurface, g_eglContext) == EGL_FALSE) {
+        LOGE("Failed to make EGL context current after recreation");
+    } else {
+        LOGI("EGL Surface successfully recreated.");
+    }
+}
+
 void destroyEGL() {
     if (g_eglDisplay != EGL_NO_DISPLAY) {
         if (g_hw_fbo)       { glDeleteFramebuffers(1, &g_hw_fbo);        g_hw_fbo = 0; }
         if (g_hw_fbo_tex)   { glDeleteTextures(1, &g_hw_fbo_tex);        g_hw_fbo_tex = 0; }
         if (g_hw_fbo_depth) { glDeleteRenderbuffers(1, &g_hw_fbo_depth); g_hw_fbo_depth = 0; }
-        if (g_hw_render_active && g_hw_render_cb.context_destroy)
-            g_hw_render_cb.context_destroy();
 
         eglMakeCurrent(g_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (g_eglContext != EGL_NO_CONTEXT) eglDestroyContext(g_eglDisplay, g_eglContext);
@@ -264,12 +289,8 @@ void retro_video_cb(const void* data, unsigned width, unsigned height, size_t pi
 
 // ── Frame Renderer ────────────────────────────────────────────────────────────
 // Uploads the video buffer as a GL texture and draws a full-screen quad.
-void renderFrame() {
-    if (g_eglDisplay == EGL_NO_DISPLAY || g_eglSurface == EGL_NO_SURFACE) {
-        LOGE("renderFrame: EGL not ready! Display=%p Surface=%p",
-             (void*)g_eglDisplay, (void*)g_eglSurface);
-        return;
-    }
+void renderFrame(bool skipEglSwap) {
+    if (g_eglDisplay == EGL_NO_DISPLAY || g_eglSurface == EGL_NO_SURFACE || !g_engineRunning) return;
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, ANativeWindow_getWidth(g_window), ANativeWindow_getHeight(g_window));
@@ -333,15 +354,34 @@ void renderFrame() {
         glDisableVertexAttribArray(texLoc);
     }
 
+    if (g_screenshotRequest.load()) {
+        std::lock_guard<std::mutex> lock(g_screenshotMutex);
+        size_t bufferSize = g_video_width * g_video_height * 4;
+        g_screenshotBuffer.resize(bufferSize);
+        glReadPixels(0, 0, g_video_width, g_video_height, GL_RGBA, GL_UNSIGNED_BYTE, g_screenshotBuffer.data());
+        
+        // Android Bitmap expects vertically flipped pixels from OpenGL, but the Java code handles flipping or we can leave it.
+        // Let's just pass raw RGBA and Java will convert to Bitmap.
+        g_screenshotRequest.store(false);
+        g_screenshotCv.notify_one();
+    }
+
+    // Skip swapping the buffers if fast forwarding is rapidly dropping frames
+    if (skipEglSwap) {
+        return;
+    }
+
     // ALWAYS swap — even if no content yet (clears to black cleanly)
     EGLBoolean swapOk = eglSwapBuffers(g_eglDisplay, g_eglSurface);
     if (!swapOk) {
         EGLint err = eglGetError();
         // EGL_BAD_SURFACE happens when the surface was destroyed by Android lifecycle
         if (err == EGL_BAD_SURFACE || err == EGL_BAD_NATIVE_WINDOW) {
-            LOGE("renderFrame: EGL surface lost (err=0x%x). Stopping engine.", err);
-            g_engineRunning = false;
+            LOGE("renderFrame: EGL surface lost (err=0x%x). Suspending rendering.", err);
+            // Do NOT stop the engine, just suspend rendering by dropping the surface.
+            g_eglSurface = EGL_NO_SURFACE;
         }
     }
 }
+
 

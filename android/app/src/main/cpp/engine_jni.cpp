@@ -151,6 +151,7 @@ Java_com_capivaraemu_studio_CapivaraEngine_setSurface(JNIEnv* env, jobject, jobj
     if (surface) {
         g_window       = ANativeWindow_fromSurface(env, surface);
         g_surfaceReady = true;
+        g_surfaceChanged = true;
         LOGI("Surface do Android conectada à Engine Nativa");
     }
 }
@@ -188,6 +189,7 @@ Java_com_capivaraemu_studio_CapivaraEngine_saveState(JNIEnv* env, jobject, jstri
     if (!core.serialize_size || !core.serialize) return JNI_FALSE;
     const char* filepath = env->GetStringUTFChars(path, nullptr);
 
+    std::lock_guard<std::mutex> lock(g_coreMutex);
     size_t size = core.serialize_size();
     bool ok = false;
     if (size > 0) {
@@ -210,6 +212,7 @@ Java_com_capivaraemu_studio_CapivaraEngine_loadState(JNIEnv* env, jobject, jstri
     if (!core.unserialize) return JNI_FALSE;
     const char* filepath = env->GetStringUTFChars(path, nullptr);
 
+    std::lock_guard<std::mutex> lock(g_coreMutex);
     FILE* f = fopen(filepath, "rb");
     bool ok = false;
     if (f) {
@@ -230,8 +233,21 @@ Java_com_capivaraemu_studio_CapivaraEngine_loadState(JNIEnv* env, jobject, jstri
 // ── JNI: Framebuffer access ───────────────────────────────────────────────────
 extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_getFramebufferPixels(JNIEnv* env, jobject) {
+    if (g_hw_render_active) {
+        std::unique_lock<std::mutex> lock(g_screenshotMutex);
+        g_screenshotRequest.store(true);
+        // Wait up to 100ms for the GL thread to capture the screen
+        if (g_screenshotCv.wait_for(lock, std::chrono::milliseconds(100), [] { return !g_screenshotRequest.load(); })) {
+            jbyteArray result = env->NewByteArray((jsize)g_screenshotBuffer.size());
+            env->SetByteArrayRegion(result, 0, (jsize)g_screenshotBuffer.size(),
+                                    (const jbyte*)g_screenshotBuffer.data());
+            return result;
+        }
+        return nullptr;
+    }
+
     std::lock_guard<std::mutex> lock(g_videoMutex);
-    if (g_videoBuffer.empty() || g_hw_render_active) return nullptr;
+    if (g_videoBuffer.empty()) return nullptr;
     jbyteArray result = env->NewByteArray((jsize)g_videoBuffer.size());
     env->SetByteArrayRegion(result, 0, (jsize)g_videoBuffer.size(),
                             (const jbyte*)g_videoBuffer.data());
@@ -242,7 +258,9 @@ extern "C" JNIEXPORT jintArray JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_getFramebufferResolution(JNIEnv* env, jobject) {
     std::lock_guard<std::mutex> lock(g_videoMutex);
     jintArray result = env->NewIntArray(3);
-    jint res[3] = { (jint)g_video_width, (jint)g_video_height, (jint)g_pixel_format };
+    // If HW render is active, pixels are captured as RGBA8888 (pixel_format = 1, assuming RETRO_PIXEL_FORMAT_XRGB8888)
+    jint format = g_hw_render_active ? 1 : (jint)g_pixel_format;
+    jint res[3] = { (jint)g_video_width, (jint)g_video_height, format };
     env->SetIntArrayRegion(result, 0, 3, res);
     return result;
 }
@@ -250,6 +268,7 @@ Java_com_capivaraemu_studio_CapivaraEngine_getFramebufferResolution(JNIEnv* env,
 extern "C" JNIEXPORT void JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_resetCheats(JNIEnv*, jobject) {
     if (core.cheat_reset) {
+        std::lock_guard<std::mutex> lock(g_coreMutex);
         LOGI("JNI: cheat_reset called");
         core.cheat_reset();
     }
@@ -258,6 +277,7 @@ Java_com_capivaraemu_studio_CapivaraEngine_resetCheats(JNIEnv*, jobject) {
 extern "C" JNIEXPORT void JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_applyCheat(JNIEnv* env, jobject, jint index, jboolean enabled, jstring code) {
     if (core.cheat_set) {
+        std::lock_guard<std::mutex> lock(g_coreMutex);
         const char* codeCStr = env->GetStringUTFChars(code, nullptr);
         LOGI("JNI: applying cheat %d -> %s (enabled: %d)", index, codeCStr, enabled);
         core.cheat_set((unsigned)index, enabled, codeCStr);
@@ -271,13 +291,19 @@ Java_com_capivaraemu_studio_CapivaraEngine_sendInput(JNIEnv*, jobject, jint /*po
     if (buttonId >= 0 && buttonId < 16) {
         std::lock_guard<std::mutex> lock(g_inputMutex);
         g_input_state[buttonId] = isPressed;
-        
-        // Intercept R2 (13) for Fast Forward if supported by the adapter
-        extern std::unique_ptr<ICoreAdapter> g_coreAdapter;
-        if (buttonId == 13 && g_coreAdapter && g_coreAdapter->supportsFastForward()) {
-            g_fastForward.store(isPressed);
-        }
     }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_setFastForward(JNIEnv*, jobject, jboolean enabled) {
+    g_fastForward.store(enabled);
+    LOGI("Fast Forward set to: %s", enabled ? "ENABLED" : "DISABLED");
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_setFrameSkip(JNIEnv*, jobject, jint skip) {
+    g_frameSkip.store(skip);
+    LOGI("Frame Skip set to: %d", skip);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -285,7 +311,12 @@ Java_com_capivaraemu_studio_CapivaraEngine_sendAnalogInput(JNIEnv* /*env*/, jobj
                                                      jint port, jint index, jint id, jshort value) {
     if (port == 0 && index >= 0 && index < 2 && id >= 0 && id < 2) {
         std::lock_guard<std::mutex> lock(g_inputMutex);
-        g_analog_state[index][id] = value;
+        // Hardware-level deadzone / noise floor threshold (~10% of 32767 = ~3200)
+        jshort cleanVal = value;
+        if (cleanVal > -3200 && cleanVal < 3200) {
+            cleanVal = 0;
+        }
+        g_analog_state[index][id] = cleanVal;
     }
 }
 
@@ -300,6 +331,11 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_resume(JNIEnv*, jobject) {
     g_enginePaused = false;
     LOGI("Engine resumed");
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_capivaraemu_studio_CapivaraEngine_getCurrentFPS(JNIEnv*, jobject) {
+    return g_currentFps.load();
 }
 
 extern "C" JNIEXPORT void JNICALL

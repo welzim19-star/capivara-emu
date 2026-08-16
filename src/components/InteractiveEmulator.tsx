@@ -56,6 +56,21 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
 
   const lastGamepadActivity = useRef<number>(0);
 
+  // CRITICAL FIX: Make the HTML body transparent so the native Android SurfaceView (rendered behind Capacitor) is visible.
+  useEffect(() => {
+    const originalBodyBg = document.body.style.backgroundColor;
+    const rootDiv = document.getElementById('root');
+    const originalRootBg = rootDiv ? rootDiv.style.backgroundColor : '';
+
+    document.body.style.backgroundColor = 'transparent';
+    if (rootDiv) rootDiv.style.backgroundColor = 'transparent';
+
+    return () => {
+      document.body.style.backgroundColor = originalBodyBg || '#050508';
+      if (rootDiv) rootDiv.style.backgroundColor = originalRootBg;
+    };
+  }, []);
+
   const handleWakeLock = () => {
     if ('wakeLock' in navigator) {
       (navigator as any).wakeLock.request('screen').catch(() => {});
@@ -71,7 +86,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
   const autofireState = useRef({ isHeld: false, intervalId: null as any });
 
   useEffect(() => {
-    const saved = localStorage.getItem(`autofire_${tenant.id}`);
+    const saved = localStorage.getItem(`capy_autofire_${tenant.id}`);
     if (saved) {
       try { autofireConfig.current = JSON.parse(saved); } catch(e) {}
     }
@@ -86,7 +101,15 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
     return () => window.removeEventListener('autofire_config_updated', handleAutofireUpdate);
   }, [tenant.id]);
 
+  const is3dConsole = ['PS1_PCSX', 'PS2_NETHERSX2', 'N64_MUPEN64PLUS'].includes(tenant.id);
+
   const emitNativeButton = async (port: number, buttonId: number, isPressed: boolean) => {
+    // R2 (13) Fast Forward on 2D Consoles
+    if (port === 0 && buttonId === 13 && !is3dConsole) {
+      setFastForward(isPressed);
+      CapivaraEngine.setFastForward({ enabled: isPressed });
+      return;
+    }
     if (port === 0 && buttonId === autofireConfig.current.buttonId && autofireConfig.current.speed > 0) {
       if (isPressed) {
         if (!autofireState.current.isHeld) {
@@ -118,6 +141,57 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
       } catch (e) {}
     }
   };
+
+  const haptic = (ms = 30) => { if ('vibrate' in navigator) navigator.vibrate(ms); };
+
+  // God-tier Multi-Touch Global Action Button Handler
+  // This allows sliding your thumb from 'Y' to 'B' smoothly, and pressing multiple buttons with a single fat thumb.
+  const activeButtonsRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    const handleGlobalTouch = (e: TouchEvent) => {
+      if (editMode) return;
+      
+      const newActive = new Set<number>();
+      for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el) {
+          const btnId = el.getAttribute('data-btn-id') || el.closest('[data-btn-id]')?.getAttribute('data-btn-id');
+          if (btnId !== null && btnId !== undefined) {
+            newActive.add(Number(btnId));
+          }
+        }
+      }
+
+      const current = activeButtonsRef.current;
+      current.forEach(id => {
+        if (!newActive.has(id)) {
+          emitNativeButton(0, id, false);
+        }
+      });
+      newActive.forEach(id => {
+        if (!current.has(id)) {
+          haptic(25);
+          emitNativeButton(0, id, true);
+        }
+      });
+      activeButtonsRef.current = newActive;
+    };
+
+    // We attach it to the window to ensure no touches are lost
+    window.addEventListener('touchstart', handleGlobalTouch, { passive: true });
+    window.addEventListener('touchmove', handleGlobalTouch, { passive: true });
+    window.addEventListener('touchend', handleGlobalTouch, { passive: true });
+    window.addEventListener('touchcancel', handleGlobalTouch, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleGlobalTouch);
+      window.removeEventListener('touchmove', handleGlobalTouch);
+      window.removeEventListener('touchend', handleGlobalTouch);
+      window.removeEventListener('touchcancel', handleGlobalTouch);
+    };
+  }, [editMode]);
 
   useGamepad(
     tenant.id,
@@ -228,7 +302,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
     localStorage.setItem(`show_controls_${tenant.id}`, String(next));
   };
 
-  const is3dConsole = ['PS1_PCSX', 'PS2_NETHERSX2', 'N64_MUPEN64PLUS'].includes(tenant.id);
+  // is3dConsole moved up to handle native buttons
   const is6ButtonGenesis = tenant.id === 'GENESIS_GENPLUSGX';
   const isSnesGba = ['SNES_SNES9X', 'GBA_MGBA'].includes(tenant.id);
   const is8Bit2Button = ['MS3_TECTOY'].includes(tenant.id);
@@ -307,16 +381,17 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
             editMode={editMode}
             className="left-8 bottom-12"
             onAxis={is3dConsole ? (x, y) => emitAnalog(0, 0, x, y) : undefined}
-            onDirectionChange={(dir) => {
-               emitNativeButton(0, 4, false);
-               emitNativeButton(0, 5, false);
-               emitNativeButton(0, 6, false);
-               emitNativeButton(0, 7, false);
+            onDirectionChange={(dirs) => {
                if (!is3dConsole) {
-                 if (dir === 'UP')    emitNativeButton(0, 4, true);
-                 if (dir === 'DOWN')  emitNativeButton(0, 5, true);
-                 if (dir === 'LEFT')  emitNativeButton(0, 6, true);
-                 if (dir === 'RIGHT') emitNativeButton(0, 7, true);
+                 emitNativeButton(0, 4, dirs.up);
+                 emitNativeButton(0, 5, dirs.down);
+                 emitNativeButton(0, 6, dirs.left);
+                 emitNativeButton(0, 7, dirs.right);
+               } else {
+                 emitNativeButton(0, 4, false);
+                 emitNativeButton(0, 5, false);
+                 emitNativeButton(0, 6, false);
+                 emitNativeButton(0, 7, false);
                }
             }}
           />
@@ -340,17 +415,17 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
             >
               {tenant.gamepadStyle.type === '2-button' ? (
                 <div className="flex space-x-6">
-                  <button onPointerDown={() => emitNativeButton(0, 8, true)} onPointerUp={() => emitNativeButton(0, 8, false)} onPointerLeave={() => emitNativeButton(0, 8, false)} onPointerCancel={() => emitNativeButton(0, 8, false)} className={`w-16 h-16 rounded-full ${tenant.gamepadStyle.bottom?.colorClass} border-2 border-white/20 font-black text-xl shadow-lg backdrop-blur-md`}>{tenant.gamepadStyle.bottom?.label}</button>
-                  <button onPointerDown={() => emitNativeButton(0, 0, true)} onPointerUp={() => emitNativeButton(0, 0, false)} onPointerLeave={() => emitNativeButton(0, 0, false)} onPointerCancel={() => emitNativeButton(0, 0, false)} className={`w-16 h-16 rounded-full ${tenant.gamepadStyle.right?.colorClass} border-2 border-white/20 font-black text-xl shadow-lg backdrop-blur-md`}>{tenant.gamepadStyle.right?.label}</button>
+                  <button data-btn-id={8} className={`w-16 h-16 rounded-full ${tenant.gamepadStyle.bottom?.colorClass} border-2 border-white/20 font-black text-xl shadow-lg backdrop-blur-md`}>{tenant.gamepadStyle.bottom?.label}</button>
+                  <button data-btn-id={0} className={`w-16 h-16 rounded-full ${tenant.gamepadStyle.right?.colorClass} border-2 border-white/20 font-black text-xl shadow-lg backdrop-blur-md`}>{tenant.gamepadStyle.right?.label}</button>
                 </div>
               ) : (
                 <div className="relative w-full h-full">
-                  {tenant.gamepadStyle.right && <button onPointerDown={() => emitNativeButton(0, 8, true)} onPointerUp={() => emitNativeButton(0, 8, false)} onPointerLeave={() => emitNativeButton(0, 8, false)} onPointerCancel={() => emitNativeButton(0, 8, false)} className={`absolute right-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.right.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.right.label}</button>}
-                  {tenant.gamepadStyle.bottom && <button onPointerDown={() => emitNativeButton(0, 0, true)} onPointerUp={() => emitNativeButton(0, 0, false)} onPointerLeave={() => emitNativeButton(0, 0, false)} onPointerCancel={() => emitNativeButton(0, 0, false)} className={`absolute bottom-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.bottom.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.bottom.label}</button>}
-                  {tenant.gamepadStyle.top && <button onPointerDown={() => emitNativeButton(0, 9, true)} onPointerUp={() => emitNativeButton(0, 9, false)} onPointerLeave={() => emitNativeButton(0, 9, false)} onPointerCancel={() => emitNativeButton(0, 9, false)} className={`absolute top-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.top.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.top.label}</button>}
-                  {tenant.gamepadStyle.left && <button onPointerDown={() => emitNativeButton(0, 1, true)} onPointerUp={() => emitNativeButton(0, 1, false)} onPointerLeave={() => emitNativeButton(0, 1, false)} onPointerCancel={() => emitNativeButton(0, 1, false)} className={`absolute left-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.left.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.left.label}</button>}
-                  {tenant.gamepadStyle.l1 && <button onPointerDown={() => emitNativeButton(0, 10, true)} onPointerUp={() => emitNativeButton(0, 10, false)} onPointerLeave={() => emitNativeButton(0, 10, false)} onPointerCancel={() => emitNativeButton(0, 10, false)} className={`absolute -top-12 left-2 w-12 h-12 rounded-full ${tenant.gamepadStyle.l1.colorClass} border border-white/20 font-bold backdrop-blur-md text-sm text-white`}>{tenant.gamepadStyle.l1.label}</button>}
-                  {tenant.gamepadStyle.r1 && <button onPointerDown={() => emitNativeButton(0, 11, true)} onPointerUp={() => emitNativeButton(0, 11, false)} onPointerLeave={() => emitNativeButton(0, 11, false)} onPointerCancel={() => emitNativeButton(0, 11, false)} className={`absolute -top-12 right-2 w-12 h-12 rounded-full ${tenant.gamepadStyle.r1.colorClass} border border-white/20 font-bold backdrop-blur-md text-sm text-white`}>{tenant.gamepadStyle.r1.label}</button>}
+                  {tenant.gamepadStyle.right && <button data-btn-id={8} className={`absolute right-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.right.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.right.label}</button>}
+                  {tenant.gamepadStyle.bottom && <button data-btn-id={0} className={`absolute bottom-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.bottom.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.bottom.label}</button>}
+                  {tenant.gamepadStyle.top && <button data-btn-id={9} className={`absolute top-2 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.top.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.top.label}</button>}
+                  {tenant.gamepadStyle.left && <button data-btn-id={1} className={`absolute left-2 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full ${tenant.gamepadStyle.left.colorClass} border border-white/20 font-bold backdrop-blur-md text-lg text-white`}>{tenant.gamepadStyle.left.label}</button>}
+                  {tenant.gamepadStyle.l1 && <button data-btn-id={10} className={`absolute -top-12 left-2 w-12 h-12 rounded-full ${tenant.gamepadStyle.l1.colorClass} border border-white/20 font-bold backdrop-blur-md text-sm text-white`}>{tenant.gamepadStyle.l1.label}</button>}
+                  {tenant.gamepadStyle.r1 && <button data-btn-id={11} className={`absolute -top-12 right-2 w-12 h-12 rounded-full ${tenant.gamepadStyle.r1.colorClass} border border-white/20 font-bold backdrop-blur-md text-sm text-white`}>{tenant.gamepadStyle.r1.label}</button>}
                 </div>
               )}
             </motion.div>
@@ -366,16 +441,16 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
               dragMomentum={false}
               className={`absolute left-1/2 bottom-4 -translate-x-1/2 flex space-x-6 pointer-events-auto ${editMode ? 'ring-4 ring-cyan-500 rounded-full cursor-move p-2 bg-white/10' : ''}`}
             >
-              <button onPointerDown={() => emitNativeButton(0, 2, true)} onPointerUp={() => emitNativeButton(0, 2, false)} onPointerLeave={() => emitNativeButton(0, 2, false)} onPointerCancel={() => emitNativeButton(0, 2, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
+              <button onTouchStart={e => { e.preventDefault(); emitNativeButton(0, 2, true); }} onTouchEnd={() => emitNativeButton(0, 2, false)} onTouchCancel={() => emitNativeButton(0, 2, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
                 SELECT
               </button>
-              <button onPointerDown={() => emitNativeButton(0, 3, true)} onPointerUp={() => emitNativeButton(0, 3, false)} onPointerLeave={() => emitNativeButton(0, 3, false)} onPointerCancel={() => emitNativeButton(0, 3, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
+              <button onTouchStart={e => { e.preventDefault(); emitNativeButton(0, 3, true); }} onTouchEnd={() => emitNativeButton(0, 3, false)} onTouchCancel={() => emitNativeButton(0, 3, false)} className="px-5 py-2 bg-white/10 active:bg-white/20 text-white/60 font-bold text-sm rounded-full tracking-widest backdrop-blur-md border border-white/10">
                 START
               </button>
             </motion.div>
           )}
 
-          {/* Visible Pause/FF button (top-center) */}
+          {/* Visible Pause/FF/Turbo button (top-center) */}
           {!editMode && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center space-x-2">
               <button
@@ -389,16 +464,31 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
               </button>
               
               {!is3dConsole && (
-                <button
-                  className={`pointer-events-auto px-4 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all backdrop-blur-sm border ${fastForward ? 'bg-cyan-500/80 text-white border-cyan-400 shadow-lg shadow-cyan-500/30' : 'bg-black/40 text-white/60 border-white/10 active:scale-95'}`}
-                  onClick={() => {
-                    const newState = !fastForward;
-                    setFastForward(newState);
-                    emitNativeButton(0, 13, newState);
-                  }}
-                >
-                  {fastForward ? '▶▶ FF ON' : '⏩ FF'}
-                </button>
+                <>
+                  <button
+                    className={`pointer-events-auto px-4 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all backdrop-blur-sm border ${fastForward ? 'bg-cyan-500/80 text-white border-cyan-400 shadow-lg shadow-cyan-500/30' : 'bg-black/40 text-white/60 border-white/10 active:scale-95'}`}
+                    onClick={() => {
+                      const newState = !fastForward;
+                      setFastForward(newState);
+                      CapivaraEngine.setFastForward({ enabled: newState });
+                    }}
+                  >
+                    {fastForward ? '▶▶ FF ON' : '⏩ FF'}
+                  </button>
+
+                  <button
+                    className={`pointer-events-auto px-4 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all backdrop-blur-sm border ${(window as any)._autofireActive ? 'bg-orange-500/80 text-white border-orange-400 shadow-lg shadow-orange-500/30' : 'bg-black/40 text-white/60 border-white/10 active:scale-95'}`}
+                    onClick={(e) => {
+                      const newState = !(window as any)._autofireActive;
+                      (window as any)._autofireActive = newState;
+                      // Force re-render just for this component visually
+                      e.currentTarget.className = `pointer-events-auto px-4 py-1.5 rounded-full text-xs font-bold tracking-widest transition-all backdrop-blur-sm border ${newState ? 'bg-orange-500/80 text-white border-orange-400 shadow-lg shadow-orange-500/30' : 'bg-black/40 text-white/60 border-white/10 active:scale-95'}`;
+                      e.currentTarget.innerText = newState ? '🔥 TURBO ON' : '⚡ TURBO';
+                    }}
+                  >
+                    {(window as any)._autofireActive ? '🔥 TURBO ON' : '⚡ TURBO'}
+                  </button>
+                </>
               )}
             </div>
           )}

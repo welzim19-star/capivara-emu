@@ -10,8 +10,8 @@ android {
         applicationId "com.capivaraemu.studio"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 22
-        versionName "1.3.5"
+        versionCode 99
+        versionName "1.9.9"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         aaptOptions {

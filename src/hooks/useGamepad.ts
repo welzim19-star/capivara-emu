@@ -63,14 +63,34 @@ export const useGamepad = (
 
           const libretroId = (map as any)[idx];
           if (libretroId !== undefined) {
-            currentFrameState[libretroId] = currentFrameState[libretroId] || pressed;
+            let finalPressed = pressed;
+            if (pressed && (window as any)._autofireActive) {
+              // Face buttons: 0, 1, 8, 9, 10, 11 (B, Y, A, X, L, R usually)
+              if ([0, 1, 8, 9].includes(libretroId)) {
+                // Pulse every 3 frames (~50ms at 60fps)
+                finalPressed = (Date.now() % 100) > 50;
+              }
+            }
+            currentFrameState[libretroId] = currentFrameState[libretroId] || finalPressed;
           }
         });
         
-        const lx = gp.axes[0] || 0;
-        const ly = gp.axes[1] || 0;
-        const rx = gp.axes[2] || 0;
-        const ry = gp.axes[3] || 0;
+        const rawLx = gp.axes[0] || 0;
+        const rawLy = gp.axes[1] || 0;
+        const rawRx = gp.axes[2] || 0;
+        const rawRy = gp.axes[3] || 0;
+
+        // [ISOLAMENTO GALVÂNICO] Radial Deadzone (15%) with smooth normalized rescaling
+        const applyRadialDeadzone = (x: number, y: number, deadzone = 0.15) => {
+          const mag = Math.sqrt(x * x + y * y);
+          if (mag < deadzone) return { x: 0, y: 0 };
+          const normalized = Math.min(1.0, (mag - deadzone) / (1.0 - deadzone));
+          const scale = normalized / mag;
+          return { x: x * scale, y: y * scale };
+        };
+
+        const { x: lx, y: ly } = applyRadialDeadzone(rawLx, rawLy, 0.15);
+        const { x: rx, y: ry } = applyRadialDeadzone(rawRx, rawRy, 0.15);
 
         const handleAxisAsButton = (axisKey: string, isPressed: boolean) => {
           if (isPressed) {
@@ -83,7 +103,7 @@ export const useGamepad = (
           }
         };
 
-        const threshold = 0.4;
+        const threshold = 0.45;
         const leftStickLeft = lx < -threshold;
         const leftStickRight = lx > threshold;
         const leftStickUp = ly < -threshold;
@@ -117,15 +137,14 @@ export const useGamepad = (
           }
         }
 
-        
-        // Only send native analog to core if changed by more than 0.05
+        // Send native analog to core with change threshold
         const checkAnalog = (port: number, stick: number, x: number, y: number) => {
           const keyX = `${port}_${stick}_x`;
           const keyY = `${port}_${stick}_y`;
           const prevX = prevAnalog.current[keyX] || 0;
           const prevY = prevAnalog.current[keyY] || 0;
           
-          if (Math.abs(x - prevX) > 0.05 || Math.abs(y - prevY) > 0.05 || (x === 0 && prevX !== 0) || (y === 0 && prevY !== 0)) {
+          if (Math.abs(x - prevX) > 0.03 || Math.abs(y - prevY) > 0.03 || (x === 0 && prevX !== 0) || (y === 0 && prevY !== 0)) {
             onAnalogChange(port, stick, x, y);
             prevAnalog.current[keyX] = x;
             prevAnalog.current[keyY] = y;

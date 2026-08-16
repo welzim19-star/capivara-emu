@@ -180,6 +180,10 @@ void GameLoop() {
     }
 
     while (g_engineRunning) {
+        if (g_surfaceChanged.exchange(false)) {
+            recreateEGLSurface();
+        }
+
         if (g_enginePaused) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
@@ -190,24 +194,52 @@ void GameLoop() {
         // Check if L2 (ID 12) is held for Rewind
         bool isRewinding = canRewind && g_input_state[12];
 
+        {
+            std::lock_guard<std::mutex> lock(g_coreMutex);
+            if (isRewinding) {
+                // Rebobinar: load previous state, skip core.run()
+                rewindIndex = (rewindIndex - 1 + REWIND_MAX_STATES) % REWIND_MAX_STATES;
+                core.unserialize(rewindBuffer[rewindIndex].data(), serializeSize);
+            } else {
+                // Normal execution
+                if (core.run) core.run();
+
+                // Save state for rewind every 6 frames (only if not in fast forward!)
+                if (canRewind && frameCount % 6 == 0 && !g_fastForward.load()) {
+                    core.serialize(rewindBuffer[rewindIndex].data(), serializeSize);
+                    rewindIndex = (rewindIndex + 1) % REWIND_MAX_STATES;
+                }
+            }
+        }
+
+        bool skipEglSwap = false;
+        static int ffRenderSkipCount = 0;
+        static int globalFrameSkipCount = 0;
+
+        if (g_fastForward.load()) {
+            ffRenderSkipCount++;
+            if (ffRenderSkipCount % 4 != 0) {
+                skipEglSwap = true; // Drop 3 out of 4 frames at the GPU swap level
+            }
+        } else {
+            ffRenderSkipCount = 0;
+            int manualSkip = g_frameSkip.load();
+            if (manualSkip > 0) {
+                globalFrameSkipCount++;
+                if (globalFrameSkipCount % (manualSkip + 1) != 0) {
+                    skipEglSwap = true;
+                }
+            } else {
+                globalFrameSkipCount = 0;
+            }
+        }
+
+        // Render frame AFTER releasing the core lock so FF isn't bottlenecked by video sync
+        renderFrame(skipEglSwap);
+
         if (isRewinding) {
-            // Rebobinar: load previous state, skip core.run()
-            rewindIndex = (rewindIndex - 1 + REWIND_MAX_STATES) % REWIND_MAX_STATES;
-            core.unserialize(rewindBuffer[rewindIndex].data(), serializeSize);
-            // Render frame directly from memory state
-            renderFrame();
             // Sleep slightly longer for a cool slow-motion rewind effect
             std::this_thread::sleep_for(std::chrono::milliseconds(16));
-        } else {
-            // Normal execution
-            if (core.run) core.run();
-            renderFrame();
-
-            // Save state for rewind every 6 frames
-            if (canRewind && frameCount % 6 == 0) {
-                core.serialize(rewindBuffer[rewindIndex].data(), serializeSize);
-                rewindIndex = (rewindIndex + 1) % REWIND_MAX_STATES;
-            }
         }
 
         ++frameCount;
@@ -235,6 +267,19 @@ void GameLoop() {
 
         auto end     = std::chrono::high_resolution_clock::now();
         int  elapsed = (int)std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+
+        // ── Calculate FPS ──
+        static auto lastFpsTime = std::chrono::high_resolution_clock::now();
+        static int fpsFrameCount = 0;
+        fpsFrameCount++;
+        auto nowFps = std::chrono::high_resolution_clock::now();
+        int msSinceLastFps = (int)std::chrono::duration_cast<std::chrono::milliseconds>(nowFps - lastFpsTime).count();
+        if (msSinceLastFps >= 1000) {
+            g_currentFps.store((fpsFrameCount * 1000.0f) / msSinceLastFps);
+            fpsFrameCount = 0;
+            lastFpsTime = nowFps;
+        }
+
         if (!isRewinding && elapsed < frameTimeUs && !g_fastForward.load()) {
             std::this_thread::sleep_for(std::chrono::microseconds(frameTimeUs - elapsed));
         }
@@ -257,15 +302,16 @@ void GameLoop() {
     }
 
     // ── 10. Teardown — all on this same thread ────────────────────────────────
-    if (core.unload_game) core.unload_game();
     
-    // ── 10. HW Render context_destroy ─────────────────────────────────────────
+    // Call HW context_destroy BEFORE unload_game and BEFORE destroying EGL
+    // This prevents SIGSEGV because the core needs to clean up its GL state 
+    // while the EGL context is still valid and the core isn't unloaded yet.
     if (g_hw_render_active && g_hw_render_cb.context_destroy) {
         LOGI("Triggering HW render context_destroy before EGL teardown...");
         g_hw_render_cb.context_destroy();
     }
 
-    destroyEGL();
+    if (core.unload_game) core.unload_game();
     if (core.deinit)      core.deinit();
 
     g_audioInitialized = false;
@@ -273,6 +319,7 @@ void GameLoop() {
     if (bqPlayerPlay)
         (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_STOPPED);
 
+    // Destroy EGL AFTER context_destroy
     destroyEGL();
 
     if (bqPlayerObject)  (*bqPlayerObject)->Destroy(bqPlayerObject);

@@ -23,6 +23,8 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.URL
 import java.util.zip.ZipInputStream
+import java.util.Timer
+import java.util.TimerTask
 
 import kotlin.concurrent.thread
 
@@ -171,31 +173,52 @@ class CapivaraPlugin : Plugin() {
         val sysDir = File(context.getExternalFilesDir(null), "system/bios")
         sysDir.mkdirs()
         
-        // Assegurar que a pasta do Play! existe para o PS2
-        File(sysDir, "Play Data").mkdirs()
-        
+
         val saveDir = File(context.getExternalFilesDir(null), "saves")
         saveDir.mkdirs()
 
         CapivaraEngine.setSystemDirectory(sysDir.absolutePath, saveDir.absolutePath)
 
         if (biosFileUriStr != null && biosFileName != null && biosFileUriStr.isNotEmpty()) {
-            udpLog("Copying BIOS file $biosFileName to sysDir...")
+            udpLog("Copying BIOS file $biosFileName across all system paths...")
             try {
                 val biosUri = Uri.parse(biosFileUriStr)
-                val destBiosFile = File(sysDir, biosFileName)
-                context.contentResolver.openInputStream(biosUri)?.use { input ->
-                    FileOutputStream(destBiosFile).use { output ->
-                        input.copyTo(output)
+                
+                val targetDirs = listOf(
+                    sysDir, // system/bios
+                    File(context.getExternalFilesDir(null), "system"),
+                    File(context.getExternalFilesDir(null), "system/dc"),
+                    File(context.filesDir, "system"),
+                    File(context.filesDir, "system/dc"),
+                    context.filesDir,
+                    context.cacheDir, // <-- MUST exist here for NeoGeo/FBNeo!
+                    File(context.cacheDir, "roms"),
+                    File(context.getExternalFilesDir(null), "system/pcsx2/bios")
+                )
+
+                for (dir in targetDirs) {
+                    dir.mkdirs()
+                    val targetFile = File(dir, biosFileName)
+                    context.contentResolver.openInputStream(biosUri)?.use { input ->
+                        FileOutputStream(targetFile).use { output -> input.copyTo(output) }
                     }
                 }
-                udpLog("BIOS copied to: ${destBiosFile.absolutePath}")
+
+                udpLog("BIOS Multi-Path Broadcast complete for: $biosFileName")
             } catch (e: Exception) {
                 udpLog("Failed to copy BIOS: ${e.message}")
             }
         }
 
-        val corePath = ensureCoreExists(coreName)
+        // ── PS2 HIGH PERFORMANCE ENGINE BRIDGE (NetherSX2 / AetherSX2) ──
+        if (coreName.contains("play_libretro") || coreName.contains("nethersx2") || coreName.contains("aethersx2")) {
+            val ps2Launcher = PS2Launcher(context, CapivaraPlugin::udpLog)
+            ps2Launcher.launchPS2(coreName, romUriStr, call)
+            return
+        }
+
+        val coreDownloader = CoreDownloader(context, CapivaraPlugin::udpLog)
+        val corePath = coreDownloader.ensureCoreExists(coreName)
         if (corePath == null) {
             udpLog("ensureCoreExists failed for $coreName")
             call.reject("Falha ao carregar ou baixar o core nativo: $coreName")
@@ -203,7 +226,8 @@ class CapivaraPlugin : Plugin() {
         }
 
         udpLog("Core ready at: $corePath. Now copying ROM...")
-        val romPath = if (romUriStr.isEmpty()) "" else copyRomToCache(romUriStr, fileName, coreName)
+        val romManager = RomManager(context, CapivaraPlugin::udpLog)
+        val romPath = if (romUriStr.isEmpty()) "" else romManager.copyRomToCache(romUriStr, fileName, coreName)
         if (romPath == null) {
             udpLog("copyRomToCache failed!")
             call.reject("Falha ao resolver arquivo do jogo.")
@@ -221,6 +245,18 @@ class CapivaraPlugin : Plugin() {
         if (initSuccess) {
             udpLog("initEngine SUCCESS. Loading Game...")
             CapivaraEngine.loadGame(romPath, sramPath)
+            
+            telemetryTimer?.cancel()
+            telemetryTimer = Timer()
+            telemetryTimer?.scheduleAtFixedRate(object : TimerTask() {
+                override fun run() {
+                    try {
+                        val fps = CapivaraEngine.getCurrentFPS()
+                        notifyListeners("onTelemetry", JSObject().put("fps", fps))
+                    } catch (e: Exception) {}
+                }
+            }, 1000, 1000)
+
             call.resolve(JSObject().put("success", true).put("message", "Game Loaded!"))
         } else {
             udpLog("initEngine FAILED.")
@@ -332,211 +368,12 @@ class CapivaraPlugin : Plugin() {
         call.resolve(ret)
     }
 
-    private fun ensureCoreExists(coreFileName: String): String? {
-        val coreFile = File(context.filesDir, coreFileName)
-        
-        if (coreFile.exists()) {
-            if (coreFile.length() > 50000) {
-                return coreFile.absolutePath
-            } else {
-                Log.w(TAG, "Corrupted core file detected (${coreFile.length()} bytes), deleting: $coreFileName")
-                coreFile.delete()
-            }
-        }
 
-        try {
-            Log.i(TAG, "Downloading core: $coreFileName")
-            val urlString = "https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/$coreFileName.zip"
-            val conn = URL(urlString).openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 10000
-            conn.readTimeout = 15000
-            
-            if (conn.responseCode != 200) {
-                Log.e(TAG, "HTTP ${conn.responseCode} when downloading core $coreFileName")
-                return null
-            }
-
-            conn.inputStream.use { input ->
-                ZipInputStream(input).use { zis ->
-                    val entry = zis.nextEntry
-                    if (entry != null) {
-                        FileOutputStream(coreFile).use { output ->
-                            zis.copyTo(output)
-                        }
-                    } else {
-                        Log.e(TAG, "Empty zip for core: $coreFileName")
-                        coreFile.delete()
-                        return null
-                    }
-                }
-            }
-            if (coreFile.exists() && coreFile.length() > 50000) {
-                return coreFile.absolutePath
-            } else {
-                coreFile.delete()
-                return null
-            }
-        } catch (e: Exception) {
-            udpLog("Error downloading core: ${e.message}")
-            Log.e(TAG, "Error downloading core: ${e.message}", e)
-            coreFile.delete()
-            return null
-        }
-    }
-
-    private fun getRealPathFromUri(uri: Uri): String? {
-        val uriStr = uri.toString()
-
-        // Legacy format: content://...primary%3A...
-        if (uriStr.contains("primary%3A") || uriStr.contains("primary:")) {
-            val decoded = Uri.decode(uriStr)
-            val pathPart = decoded.substringAfterLast("primary:").trimStart('/')
-            return "/storage/emulated/0/$pathPart"
-        }
-
-        // DocumentsContract format (Android 5.0+ SAF)
-        try {
-            if (android.provider.DocumentsContract.isDocumentUri(context, uri)) {
-                val docId = android.provider.DocumentsContract.getDocumentId(uri)
-                val split = docId.split(":")
-                val storageType = split.getOrNull(0) ?: return null
-                val relPath = split.getOrNull(1) ?: return null
-
-                if (storageType.equals("primary", ignoreCase = true)) {
-                    return "/storage/emulated/0/$relPath"
-                } else {
-                    // External SD: storageType is the UUID (e.g. "1234-ABCD")
-                    return "/storage/$storageType/$relPath"
-                }
-            }
-        } catch (e: Exception) {
-            udpLog("DocumentsContract path resolve failed: ${e.message}")
-        }
-
-        // Last resort: try content query for _data column
-        try {
-            val cursor = context.contentResolver.query(uri, arrayOf("_data"), null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val colIdx = it.getColumnIndex("_data")
-                    if (colIdx >= 0) {
-                        val path = it.getString(colIdx)
-                        if (!path.isNullOrBlank()) return path
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            udpLog("Content query for _data failed: ${e.message}")
-        }
-
-        return null
-    }
-
-    private fun copyRomToCache(uriString: String, originalFileName: String, coreFileName: String): String? {
-        udpLog("copyRomToCache called for $originalFileName")
-        try {
-            // Fechar FD anterior se existir
-            activeRomFd?.close()
-            activeRomFd = null
-
-            // MAME e FBNeo exigem o nome exato do arquivo zip. Outros usam sanitização segura.
-            val isMame = coreFileName.contains("mame") || coreFileName.contains("fbneo")
-            val cacheFileName = if (isMame) originalFileName else originalFileName.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
-            val cacheFile = File(context.cacheDir, cacheFileName)
-
-            // Apagar symlink ou arquivo anterior
-            if (cacheFile.exists()) {
-                cacheFile.delete()
-            }
-
-            if (uriString.startsWith("http")) {
-                // Para HTTP, somos obrigados a fazer download real
-                URL(uriString).openStream().use { input ->
-                    FileOutputStream(cacheFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                return cacheFile.absolutePath
-            }
-
-            val uri = Uri.parse(uriString)
-
-            val isLargeIsoCore = coreFileName.contains("nethersx2") || coreFileName.contains("ppsspp") || coreFileName.contains("play")
-            if (isLargeIsoCore) {
-                // Market Standard: Use absolute path if MANAGE_EXTERNAL_STORAGE is granted
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && android.os.Environment.isExternalStorageManager()) {
-                    val realPath = getRealPathFromUri(uri)
-                    if (realPath != null && File(realPath).exists()) {
-                        udpLog("Using absolute path directly (All Files Access): $realPath")
-                        return realPath
-                    }
-                }
-
-                udpLog("Opening FileDescriptor for Zero-Copy...")
-                activeRomFd = context.contentResolver.openFileDescriptor(uri, "r")
-                if (activeRomFd != null) {
-                    val fd = activeRomFd!!.fd
-                    val fdPath = "/proc/self/fd/$fd"
-                    try {
-                        android.system.Os.symlink(fdPath, cacheFile.absolutePath)
-                        udpLog("Using Zero-Copy symlink for large ISO: ${cacheFile.absolutePath} -> $fdPath")
-                        return cacheFile.absolutePath
-                    } catch (e: Exception) {
-                        udpLog("Symlink failed (${e.message}), falling back to FD path: $fdPath")
-                        return fdPath
-                    }
-                } else {
-                    udpLog("openFileDescriptor returned null!")
-                }
-            }
-
-            // Stream Copy real
-            val isFbneo = coreFileName.contains("fbneo")
-            if (originalFileName.lowercase().endsWith(".zip") && !isMame && !isFbneo) {
-                udpLog("ZIP detected for non-MAME core. Extracting first file...")
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    ZipInputStream(input).use { zis ->
-                        val entry = zis.nextEntry
-                        if (entry != null) {
-                            val extractedFileName = entry.name.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
-                            val extractedFile = File(context.cacheDir, extractedFileName)
-                            udpLog("Extracting to: $extractedFileName")
-                            FileOutputStream(extractedFile).use { output ->
-                                zis.copyTo(output, 128 * 1024)
-                            }
-                            if (extractedFile.exists() && extractedFile.length() > 0) {
-                                return extractedFile.absolutePath
-                            }
-                        }
-                    }
-                }
-                udpLog("Zip extraction failed, falling back to direct copy.")
-            }
-
-            udpLog("Starting stream copy to cache...")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(cacheFile).use { output ->
-                    input.copyTo(output, 128 * 1024)
-                }
-            }
-            if (cacheFile.exists() && cacheFile.length() > 0) {
-                return cacheFile.absolutePath
-            } else {
-                udpLog("Stream copy failed or file empty.")
-                Log.e(TAG, "Stream copy falhou ou arquivo vazio: $cacheFileName")
-                return null
-            }
-
-        } catch (e: Exception) {
-            udpLog("copyRomToCache Exception: ${e.message}")
-            Log.e(TAG, "copyRomToCache error: ${e.message}", e)
-            return null
-        }
-    }
 
     @PluginMethod
     fun saveState(call: PluginCall) {
-        val path = File(context.cacheDir, "save.state").absolutePath
+        val slot = call.getInt("slot", 0) ?: 0
+        val path = File(context.cacheDir, "save_${slot}.state").absolutePath
         val success = CapivaraEngine.saveState(path)
         
         if (!success) {
@@ -553,12 +390,16 @@ class CapivaraPlugin : Plugin() {
             if (pixels != null && res != null && res.size >= 2 && res[0] > 0 && res[1] > 0) {
                 val width = res[0]
                 val height = res[1]
-                val unsignedPixels = pixels.map { it.toInt() and 0xFF }.toIntArray()
                 val argbPixels = IntArray(width * height)
-                for (i in argbPixels.indices) {
-                    val r = unsignedPixels[i * 4 + 0]
-                    val g = unsignedPixels[i * 4 + 1]
-                    val b = unsignedPixels[i * 4 + 2]
+                
+                // Avoid allocating millions of Integer objects!
+                val expectedBytes = width * height * 4
+                val limit = if (pixels.size < expectedBytes) pixels.size / 4 else width * height
+                
+                for (i in 0 until limit) {
+                    val r = pixels[i * 4 + 0].toInt() and 0xFF
+                    val g = pixels[i * 4 + 1].toInt() and 0xFF
+                    val b = pixels[i * 4 + 2].toInt() and 0xFF
                     argbPixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
                 }
                 
@@ -606,7 +447,24 @@ class CapivaraPlugin : Plugin() {
         call.resolve()
     }
 
+    override fun handleOnPause() {
+        super.handleOnPause()
+        udpLog("App Paused: Pausing Engine")
+        try {
+            CapivaraEngine.pause()
+        } catch(e: Exception) {}
+    }
+
+    override fun handleOnResume() {
+        super.handleOnResume()
+        udpLog("App Resumed: Resuming Engine")
+        try {
+            CapivaraEngine.resume()
+        } catch(e: Exception) {}
+    }
+
     private var activeRomFd: ParcelFileDescriptor? = null
+    private var telemetryTimer: Timer? = null
     private var logcatProcess: Process? = null
 
     @PluginMethod
@@ -651,7 +509,8 @@ class CapivaraPlugin : Plugin() {
 
     @PluginMethod
     fun loadState(call: PluginCall) {
-        val path = File(context.cacheDir, "save.state").absolutePath
+        val slot = call.getInt("slot", 0) ?: 0
+        val path = File(context.cacheDir, "save_${slot}.state").absolutePath
         val success = CapivaraEngine.loadState(path)
         if (success) {
             call.resolve()
@@ -673,7 +532,24 @@ class CapivaraPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun setFastForward(call: PluginCall) {
+        val enabled = call.getBoolean("enabled", false) ?: false
+        CapivaraEngine.setFastForward(enabled)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun setFrameSkip(call: PluginCall) {
+        val skip = call.getInt("skip", 0) ?: 0
+        CapivaraEngine.setFrameSkip(skip)
+        call.resolve()
+    }
+
+    @PluginMethod
     fun destroyEngine(call: PluginCall) {
+        udpLog("Destroying Engine...")
+        telemetryTimer?.cancel()
+        telemetryTimer = null
         CapivaraEngine.destroyEngine()
         call.resolve()
     }

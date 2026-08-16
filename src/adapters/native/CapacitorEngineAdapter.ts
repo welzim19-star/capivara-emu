@@ -9,10 +9,28 @@ export class CapacitorEngineAdapter implements EnginePort {
   async setConfig(configMatrix: any): Promise<void> {
     const coreSettings: Record<string, string> = {};
     
+    // Global Settings
+    if (configMatrix.global_frame_skip !== undefined) {
+      await CapivaraEngine.setFrameSkip({ skip: Number(configMatrix.global_frame_skip) });
+    }
+    
     // SNES
-    if (configMatrix.snes9x_filter) coreSettings['snes9x_filter'] = String(configMatrix.snes9x_filter);
     if (configMatrix.snes9x_superfx_overclock) coreSettings['snes9x_overclock_superfx'] = String(configMatrix.snes9x_superfx_overclock);
-    if (configMatrix.snes9x_audio_interpolation) coreSettings['snes9x_sndchan_2'] = configMatrix.snes9x_audio_interpolation.toLowerCase();
+    if (configMatrix.snes9x_audio_interpolation) coreSettings['snes9x_echo_interpolation'] = String(configMatrix.snes9x_audio_interpolation).toLowerCase();
+    
+    // SNES Video Filter
+    if (configMatrix.snes9x_filter && configMatrix.snes9x_filter !== 'none') {
+      if (configMatrix.snes9x_filter.startsWith('blargg')) {
+        coreSettings['snes9x_blargg'] = configMatrix.snes9x_filter.replace('blargg_ntsc_', '');
+        coreSettings['snes9x_filter'] = 'none'; // Desativa filtros digitais se usar Blargg
+      } else {
+        coreSettings['snes9x_filter'] = configMatrix.snes9x_filter;
+        coreSettings['snes9x_blargg'] = 'none';
+      }
+    } else {
+      coreSettings['snes9x_filter'] = 'none';
+      coreSettings['snes9x_blargg'] = 'none';
+    }
     
     // PS1 (PGXP & True Color)
     if (configMatrix.duckstation_pgxp) coreSettings['duckstation_pgxp_vertex'] = 'true';
@@ -22,7 +40,19 @@ export class CapacitorEngineAdapter implements EnginePort {
     
     // NeoGeo (FBNeo)
     if (configMatrix.fbneo_unibios) coreSettings['fbneo-allow-patched-romsets'] = 'enabled';
-    if (configMatrix.fbneo_neogeo_mode) coreSettings['fbneo-neogeo-mode'] = configMatrix.fbneo_neogeo_mode === 'AES (Console)' ? 'UNIBIOS' : 'MVS';
+    if (configMatrix.fbneo_neogeo_mode) {
+      const modeStr = String(configMatrix.fbneo_neogeo_mode);
+      if (modeStr.includes("AES")) {
+        coreSettings['fbneo-neogeo-mode'] = "AES";
+        coreSettings['fbneo-bios'] = "13"; // Force AES Asia
+      } else if (modeStr.includes("UNIBIOS")) {
+        coreSettings['fbneo-neogeo-mode'] = "UNIBIOS";
+        coreSettings['fbneo-bios'] = "15"; // Force Unibios 3.3
+      } else {
+        coreSettings['fbneo-neogeo-mode'] = "DIPSWITCH"; // Default to DIPSWITCH which handles MVS
+        coreSettings['fbneo-bios'] = "0"; // Default MVS Asia
+      }
+    }
     if (configMatrix.fbneo_cpu_overclock) coreSettings['fbneo-cpu-speed-adjust'] = String(configMatrix.fbneo_cpu_overclock);
     
     // Arcade (MAME)
@@ -38,6 +68,12 @@ export class CapacitorEngineAdapter implements EnginePort {
     if (configMatrix.resolution) coreSettings['mupen64plus-next-43res'] = String(configMatrix.resolution);
     if (configMatrix.framerate_hack !== undefined) coreSettings['mupen64plus-next-virefresh'] = configMatrix.framerate_hack ? 'True' : 'False';
     if (configMatrix.cpucore) coreSettings['mupen64plus-next-cpucore'] = String(configMatrix.cpucore);
+
+    // Dreamcast (Flycast)
+    if (configMatrix.flycast_internal_resolution) coreSettings['flycast_internal_resolution'] = String(configMatrix.flycast_internal_resolution).split(' ')[0];
+    if (configMatrix.flycast_widescreen_hack !== undefined) coreSettings['flycast_widescreen_hack'] = configMatrix.flycast_widescreen_hack ? 'enabled' : 'disabled';
+    if (configMatrix.flycast_cable_type) coreSettings['flycast_cable_type'] = configMatrix.flycast_cable_type.includes('VGA') ? '0' : '1';
+    if (configMatrix.flycast_dsp !== undefined) coreSettings['flycast_dsp'] = configMatrix.flycast_dsp ? 'enabled' : 'disabled';
 
     try {
       await CapivaraEngine.updateCoreOptions(coreSettings);

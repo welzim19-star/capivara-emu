@@ -15,8 +15,24 @@
 
     <!-- Recursos opcionais (não requeridos) -->
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
-    <uses-feature android:name="android.hardware.vulkan.version"
-        android:version="0x40080000" android:required="false" />
+    
+    <!-- Queries para Package Visibility (Android 11+) -->
+    <queries>
+        <package android:name="xyz.aethersx2.android" />
+        <package android:name="xyz.aethersx2.android.alpha" />
+        <package android:name="xyz.aethersx2.android.beta" />
+        <package android:name="com.nethersx2.android" />
+        <package android:name="xyz.nethersx2.android" />
+        <package android:name="com.aethersx2.android" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/octet-stream" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="content" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"

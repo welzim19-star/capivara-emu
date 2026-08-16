@@ -104,6 +104,27 @@ export const TENANT_GAMEPAD_LAYOUTS: Record<string, PhysicalGamepadLayout> = {
       { id: 10, type: 'button', label: '5', cssClasses: 'rounded-full bg-white/20', x: 440, y: 80, width: 45, height: 45 },
       { id: 11, type: 'button', label: '6', cssClasses: 'rounded-full bg-white/20', x: 500, y: 60, width: 45, height: 45 },
     ]
+  },
+  'DREAMCAST_FLYCAST': {
+    id: 'DREAMCAST_FLYCAST',
+    name: 'Dreamcast Pad',
+    width: 600,
+    height: 320,
+    scale: 0.8,
+    elements: [
+      { id: 10, type: 'trigger', label: 'L', cssClasses: 'rounded-t-xl bg-zinc-800', x: 80, y: 10, width: 100, height: 35 },
+      { id: 11, type: 'trigger', label: 'R', cssClasses: 'rounded-t-xl bg-zinc-800', x: 420, y: 10, width: 100, height: 35 },
+      { id: 14, type: 'analog', label: 'Stick', cssClasses: 'rounded-full border-4 bg-zinc-800', x: 70, y: 70, width: 70, height: 70 },
+      { id: 4, type: 'button', label: 'Up', cssClasses: 'rounded-t-md bg-zinc-700', x: 90, y: 160, width: 30, height: 35 },
+      { id: 5, type: 'button', label: 'Down', cssClasses: 'rounded-b-md bg-zinc-700', x: 90, y: 225, width: 30, height: 35 },
+      { id: 6, type: 'button', label: 'Left', cssClasses: 'rounded-l-md bg-zinc-700', x: 60, y: 195, width: 35, height: 30 },
+      { id: 7, type: 'button', label: 'Right', cssClasses: 'rounded-r-md bg-zinc-700', x: 115, y: 195, width: 35, height: 30 },
+      { id: 3, type: 'button', label: 'Start', cssClasses: 'rounded-full bg-orange-600', x: 280, y: 180, width: 40, height: 40 },
+      { id: 9, type: 'button', label: 'Y', cssClasses: 'rounded-full bg-yellow-400 text-black font-bold', x: 470, y: 90, width: 45, height: 45 },
+      { id: 1, type: 'button', label: 'X', cssClasses: 'rounded-full bg-blue-600 text-white font-bold', x: 425, y: 135, width: 45, height: 45 },
+      { id: 0, type: 'button', label: 'B', cssClasses: 'rounded-full bg-red-600 text-white font-bold', x: 515, y: 135, width: 45, height: 45 },
+      { id: 8, type: 'button', label: 'A', cssClasses: 'rounded-full bg-emerald-500 text-black font-bold', x: 470, y: 180, width: 45, height: 45 },
+    ]
   }
 };
 
@@ -175,6 +196,15 @@ export const TENANT_THEMES: Record<string, ThemeConfig> = {
     panelStyle: 'rounded-2xl border border-blue-900/50',
     glowEffect: true,
     buttonClass: 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]',
+  },
+  'DREAMCAST_FLYCAST': {
+    bgColor: 'bg-[#0a0f1d]',
+    headerColor: 'bg-[#121b33]',
+    accentColor: 'text-orange-500',
+    fontFamily: 'font-sans font-bold',
+    panelStyle: 'rounded-xl border border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.2)]',
+    glowEffect: true,
+    buttonClass: 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-md shadow-orange-500/30',
   }
 };
 
@@ -191,7 +221,7 @@ export const DEFAULT_THEME: ThemeConfig = {
 
 export const TENANT_ENGINE_OPTIONS: Record<string, EngineOption[]> = {
   'SNES_SNES9X': [
-    { id: 'snes9x_filter', label: 'Video Filter', description: 'Smoothing algorithm for pixel art', type: 'select', category: 'Graphics', default: 'None', options: ['None'] },
+    { id: 'snes9x_filter', label: 'Video Filter', description: 'Smoothing algorithm for pixel art', type: 'select', category: 'Graphics', default: 'none', options: ['none', 'hq2x', 'hq3x', 'hq4x', 'supereagle', '2xsai', 'super2xsai', 'epx', 'blargg_ntsc_composite', 'blargg_ntsc_s-video', 'blargg_ntsc_rgb'] },
     { id: 'snes9x_superfx_overclock', label: 'SuperFX Overclock', description: 'Boosts FPS in Star Fox and Yoshi\'s Island', type: 'slider', category: 'Advanced', default: 100, min: 100, max: 500, step: 50, unit: '%' },
     { id: 'snes9x_audio_interpolation', label: 'Audio Interpolation', description: 'Smooths out low-quality audio samples', type: 'select', category: 'Audio', default: 'Gaussian', options: ['None', 'Linear', 'Gaussian', 'Sinc'] }
   ],
@@ -224,5 +254,15 @@ export const TENANT_ENGINE_OPTIONS: Record<string, EngineOption[]> = {
     { id: 'resolution', label: 'Internal Resolution', description: 'Upscaling factor', type: 'select', category: 'Graphics', default: '640x480', options: ['320x240 (Native)', '640x480', '960x720', '1440x1080'] },
     { id: 'framerate_hack', label: 'Full Framerate Hack', description: 'Forces 60fps in some games', type: 'toggle', category: 'System', default: false },
     { id: 'cpucore', label: 'CPU Core', description: 'Execution engine', type: 'select', category: 'System', default: 'dynamic_recompiler', options: ['pure_interpreter', 'cached_interpreter', 'dynamic_recompiler'] }
+  ],
+  'DREAMCAST_FLYCAST': [
+    { id: 'flycast_internal_resolution', label: 'Internal Resolution', description: '3D Upscaling factor', type: 'select', category: 'Graphics', default: '1280x960 (2x)', options: ['640x480 (Native)', '1280x960 (2x)', '1920x1440 (3x)'] },
+    { id: 'flycast_widescreen_hack', label: 'Widescreen 16:9 Hack', description: 'Expands 3D viewport to fill modern phone screens', type: 'toggle', category: 'Graphics', default: true },
+    { id: 'flycast_cable_type', label: 'Cable Type', description: 'Video output mode (VGA provides sharpest picture)', type: 'select', category: 'Graphics', default: 'VGA (RGB)', options: ['VGA (RGB)', 'TV (Composite)'] },
+    { id: 'flycast_dsp', label: 'DSP Audio Emulation', description: 'Hardware accurate sound processing', type: 'toggle', category: 'Audio', default: false },
   ]
 };
+
+export const GLOBAL_OPTIONS: EngineOption[] = [
+  { id: 'global_frame_skip', label: 'Frame Skip Manual', description: '0 = Normal. 1 ou mais = Corta quadros pra melhorar FPS.', type: 'slider', category: 'Advanced', default: 0, min: 0, max: 3, step: 1, unit: '' }
+];

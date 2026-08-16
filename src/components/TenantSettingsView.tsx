@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { TenantInfo, GameItem } from '../types';
-import { TENANT_THEMES, DEFAULT_THEME, TENANT_ENGINE_OPTIONS, EngineOption } from '../core/domain/TenantConfig';
+import { TENANT_THEMES, DEFAULT_THEME, TENANT_ENGINE_OPTIONS, EngineOption, GLOBAL_OPTIONS } from '../core/domain/TenantConfig';
 
 interface Props {
   tenant: TenantInfo;
@@ -13,7 +13,7 @@ interface Props {
 
 export const TenantSettingsView: React.FC<Props> = ({ tenant, game, onClose, onSave, initialConfig = {} }) => {
   const theme = TENANT_THEMES[tenant.id] || DEFAULT_THEME;
-  const options = TENANT_ENGINE_OPTIONS[tenant.id] || [];
+  const options = [...(TENANT_ENGINE_OPTIONS[tenant.id] || []), ...GLOBAL_OPTIONS];
   const [isOverride, setIsOverride] = useState<boolean>(() => {
     if (game) {
       return localStorage.getItem(`override_${game.id}`) !== null;

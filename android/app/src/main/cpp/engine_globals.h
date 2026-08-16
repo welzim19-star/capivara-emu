@@ -71,6 +71,8 @@ extern std::atomic<bool>            g_engineRunning;
 extern std::atomic<bool>            g_audioInitialized;
 extern std::atomic<bool>            g_fastForward;
 extern std::atomic<bool>            g_bilinearFilter;
+extern std::atomic<int>             g_frameSkip;
+extern std::atomic<float>           g_currentFps;
 extern std::thread                  g_gameThread;
 extern std::mutex                   g_inputMutex;
 extern std::unordered_map<std::string, std::string> g_core_options;
@@ -108,14 +110,23 @@ extern int                          g_audioWriteOffset;
 extern std::mutex                   g_audioMutex;
 extern std::condition_variable      g_audioCv;
 extern std::mutex                   g_videoMutex;
+extern std::mutex                   g_coreMutex;
 extern std::vector<uint8_t>         g_videoBuffer;
 extern bool                         g_videoFrameReady;
+
+// HW Screenshot Sync
+extern std::atomic<bool>            g_screenshotRequest;
+extern std::vector<uint8_t>         g_screenshotBuffer;
+extern std::mutex                   g_screenshotMutex;
+extern std::condition_variable      g_screenshotCv;
+
 extern std::string                  g_romPath;
 extern std::string                  g_sramPath;
 extern std::string                  g_corePath;
 
 bool loadCore(const char* path);
 extern std::atomic<bool>            g_enginePaused;
+extern std::atomic<bool>            g_surfaceChanged;
 extern double                       g_coreSampleRate;
 extern double                       g_resampleRatio;
 extern double                       g_fraction;
@@ -138,10 +149,11 @@ void    retro_audio_cb(int16_t left, int16_t right);
 size_t  retro_audio_batch_cb(const int16_t *data, size_t frames);
 void    initAudio(double coreSampleRate);
 bool    initEGL();
+void    recreateEGLSurface();
 void    destroyEGL();
 void    setup_hw_fbo();
 GLuint  compileShader(GLenum type, const char* src);
-void    renderFrame();
+void    renderFrame(bool skipEglSwap = false);
 void    retro_video_cb(const void *data, unsigned width, unsigned height, size_t pitch);
 bool    retro_env_callback(unsigned cmd, void *data);
 void    retro_input_poll_cb(void);
