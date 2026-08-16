@@ -21,6 +21,7 @@ export default function App() {
   const [tenantsState, setTenantsState] = useState<TenantInfo[]>(TENANTS);
   const [currentGame, setCurrentGame] = useState<GameItem | null>(null);
   const [currentTenant, setCurrentTenant] = useState<TenantInfo | null>(null);
+  const [lastActiveTenantId, setLastActiveTenantId] = useState<string | null>(null);
   const [isScraperOpen, setIsScraperOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -139,8 +140,9 @@ export default function App() {
       biosFileUri: biosFileUri ?? undefined,
       biosFileName: biosFileName ?? undefined,
     };
-    setCurrentTenant(tenant);
     setCurrentGame(enrichedGame);
+    setCurrentTenant(tenant);
+    setLastActiveTenantId(tenant.id);
   };
 
   const handleRunScraper = () => {
@@ -202,6 +204,7 @@ export default function App() {
       {activeLayout === 'steamos' ? (
         <SteamOSDeckLayout 
           tenants={tenantsState} 
+          initialTenantId={lastActiveTenantId}
           onLaunch={handleLaunchGame} 
           onRunScraper={handleRunScraper}
           onOpenSaves={handleOpenSaves}
@@ -212,6 +215,7 @@ export default function App() {
       ) : (
         <SwitchMinimalLayout 
           tenants={tenantsState} 
+          initialTenantId={lastActiveTenantId}
           onLaunch={handleLaunchGame} 
           onRunScraper={handleRunScraper}
           onOpenSaves={handleOpenSaves}

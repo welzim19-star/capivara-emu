@@ -567,6 +567,35 @@ class CapivaraPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun getLocalIP(call: PluginCall) {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+
+                val addresses = iface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val addr = addresses.nextElement()
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        val ret = JSObject()
+                        ret.put("ip", addr.hostAddress)
+                        call.resolve(ret)
+                        return
+                    }
+                }
+            }
+            val ret = JSObject()
+            ret.put("ip", "127.0.0.1")
+            call.resolve(ret)
+        } catch (e: Exception) {
+            val ret = JSObject()
+            ret.put("ip", "127.0.0.1")
+            call.resolve(ret)
+        }
+    }
+
+    @PluginMethod
     fun requestAllFilesAccess(call: PluginCall) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             if (!android.os.Environment.isExternalStorageManager()) {

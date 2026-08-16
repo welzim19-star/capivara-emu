@@ -26,4 +26,9 @@ export interface EnginePort {
   resetCheats(): Promise<void>;
   applyCheat(index: number, enabled: boolean, code: string): Promise<void>;
   sendAnalog(port: number, stick: number, x: number, y: number): Promise<void>;
+
+  // TV Casting
+  startCasting(): Promise<void>;
+  stopCasting(): Promise<void>;
+  getLocalIP(): Promise<string>;
 }

@@ -3,6 +3,9 @@ import { TenantInfo, GameItem } from '../../types';
 import { CapyLogo } from '../CapyLogo';
 import { sfx } from '../../utils/sfx';
 import { RomFolderPickerModal } from '../RomFolderPickerModal';
+import { CastButton } from '../CastButton';
+import { GameScraperService } from '../../services/GameScraperService';
+import { useGamepadNavigation } from '../../hooks/useGamepadNavigation';
 
 interface Props {
   tenants: TenantInfo[];
@@ -12,6 +15,7 @@ interface Props {
   onOpenAutofire: (tenant: TenantInfo) => void;
   onToggleLayout: () => void;
   onRomsMapped: () => void;
+  initialTenantId?: string | null;
 }
 
 export const SteamOSDeckLayout: React.FC<Props> = ({ 
@@ -21,15 +25,24 @@ export const SteamOSDeckLayout: React.FC<Props> = ({
   onOpenSaves, 
   onOpenAutofire,
   onToggleLayout,
-  onRomsMapped
+  onRomsMapped,
+  initialTenantId
 }) => {
-  const [selectedTenantIdx, setSelectedTenantIdx] = useState(0);
+  const [selectedTenantIdx, setSelectedTenantIdx] = useState(() => {
+    if (initialTenantId) {
+      const idx = tenants.findIndex(t => t.id === initialTenantId);
+      return idx >= 0 ? idx : 0;
+    }
+    return 0;
+  });
   const [selectedGameIdx, setSelectedGameIdx] = useState(0);
   const [romPickerTenant, setRomPickerTenant] = useState<TenantInfo | null>(null);
 
   const activeTenant = tenants[selectedTenantIdx] || tenants[0];
   const activeGame = activeTenant?.games?.[selectedGameIdx] || activeTenant?.games?.[0] || null;
   const hasMappedDir = (t: TenantInfo) => !!localStorage.getItem(`mapped_dir_${t.id}`);
+
+  useGamepadNavigation(!romPickerTenant);
 
   if (!activeTenant) return <div className="p-8 text-white">Carregando Emuladores...</div>;
 
@@ -45,6 +58,9 @@ export const SteamOSDeckLayout: React.FC<Props> = ({
           }}
         />
       )}
+
+      {/* Cast Button */}
+      <CastButton />
 
       <div className="relative w-full h-[100dvh] overflow-y-auto overflow-x-hidden bg-[#07090e] flex flex-col pt-[max(env(safe-area-inset-top),2rem)] px-3 pb-4 select-none custom-scrollbar">
         {/* Dynamic Background Blur Hero */}
@@ -186,14 +202,15 @@ export const SteamOSDeckLayout: React.FC<Props> = ({
 
             <div className="flex space-x-2.5 overflow-x-auto pb-1.5 custom-scrollbar">
               {activeTenant.games.map((game, idx) => (
-                <div
+                <button
                   key={game.id}
                   onClick={() => {
                     sfx.playSelect();
                     setSelectedGameIdx(idx);
                   }}
                   onDoubleClick={() => onLaunch(game, activeTenant)}
-                  className={`relative shrink-0 w-24 h-36 landscape:w-20 landscape:h-28 rounded-xl cursor-pointer transition-all border-2 overflow-hidden flex flex-col justify-end bg-zinc-900 ${
+                  tabIndex={0}
+                  className={`relative shrink-0 w-24 h-36 landscape:w-20 landscape:h-28 rounded-xl cursor-pointer transition-all border-2 overflow-hidden flex flex-col justify-end bg-zinc-900 focus:outline-none focus:ring-4 focus:ring-cyan-500/50 ${
                     selectedGameIdx === idx 
                       ? 'border-cyan-400 scale-105 glow-cyan shadow-lg z-10' 
                       : 'border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'
@@ -202,23 +219,30 @@ export const SteamOSDeckLayout: React.FC<Props> = ({
                   {game.boxArtUrl ? (
                     <>
                       <img 
-                        src={game.boxArtUrl} 
+                        src={GameScraperService.getCachedUrl(game.id) || game.boxArtUrl} 
                         alt={game.title} 
                         className="absolute inset-0 w-full h-full object-cover" 
+                        onLoad={(e) => GameScraperService.setCachedUrl(game.id, e.currentTarget.src)}
                         onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          const fallback = e.currentTarget.nextElementSibling;
-                          if (fallback) fallback.classList.remove('hidden');
+                          const target = e.currentTarget;
+                          const retryCount = parseInt(target.dataset.retryCount || '0', 10);
+                          const nextUrl = GameScraperService.getNextBoxartFallback(activeTenant.id, game.title, game.fileName, retryCount + 1);
+                          
+                          if (nextUrl) {
+                            target.dataset.retryCount = (retryCount + 1).toString();
+                            target.src = nextUrl;
+                            return;
+                          }
+                          target.src = GameScraperService.generateFallbackCover(game.title, activeTenant.color);
                         }}
                       />
-                      <div className={`absolute inset-0 hidden bg-gradient-to-br ${game.banner || 'from-zinc-800 to-zinc-900'}`} />
                     </>
                   ) : (
                     <div className={`absolute inset-0 bg-gradient-to-br ${game.banner || 'from-zinc-800 to-zinc-900'}`} />
                   )}
                   
                   {/* Dark gradient overlay for text readability */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent pointer-events-none" />
+                  <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/10 to-transparent pointer-events-none" />
 
                   <div className="relative p-2 landscape:p-1.5 z-10">
                     <div className="flex justify-between items-start text-[8px] font-mono mb-0.5">
@@ -231,7 +255,7 @@ export const SteamOSDeckLayout: React.FC<Props> = ({
                       <span className="text-[7px] font-mono text-cyan-300 truncate block drop-shadow-md">{game.genre || 'Game'}</span>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>

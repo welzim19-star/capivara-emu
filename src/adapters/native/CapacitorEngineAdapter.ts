@@ -6,13 +6,8 @@ const CapivaraEngine = registerPlugin<any>('CapivaraEngine');
 
 export class CapacitorEngineAdapter implements EnginePort {
   // ── CONFIGURATION MATRIX ────────────────────────────────────────────────
-  async setConfig(configMatrix: any): Promise<void> {
+  static translateConfig(configMatrix: any): Record<string, string> {
     const coreSettings: Record<string, string> = {};
-    
-    // Global Settings
-    if (configMatrix.global_frame_skip !== undefined) {
-      await CapivaraEngine.setFrameSkip({ skip: Number(configMatrix.global_frame_skip) });
-    }
     
     // SNES
     if (configMatrix.snes9x_superfx_overclock) coreSettings['snes9x_overclock_superfx'] = String(configMatrix.snes9x_superfx_overclock);
@@ -43,8 +38,11 @@ export class CapacitorEngineAdapter implements EnginePort {
     if (configMatrix.fbneo_neogeo_mode) {
       const modeStr = String(configMatrix.fbneo_neogeo_mode);
       if (modeStr.includes("AES")) {
-        coreSettings['fbneo-neogeo-mode'] = "AES";
-        coreSettings['fbneo-bios'] = "13"; // Force AES Asia
+        // We use DIPSWITCH because it forces the emulator to look at 'fbneo-bios'
+        // fbneo-bios = 13 usually maps to AES Asia. If they only have aes.zip, UNIBIOS will fail.
+        coreSettings['fbneo-neogeo-mode'] = "DIPSWITCH";
+        coreSettings['fbneo-bios'] = "13"; // AES Asia
+
       } else if (modeStr.includes("UNIBIOS")) {
         coreSettings['fbneo-neogeo-mode'] = "UNIBIOS";
         coreSettings['fbneo-bios'] = "15"; // Force Unibios 3.3
@@ -75,6 +73,19 @@ export class CapacitorEngineAdapter implements EnginePort {
     if (configMatrix.flycast_cable_type) coreSettings['flycast_cable_type'] = configMatrix.flycast_cable_type.includes('VGA') ? '0' : '1';
     if (configMatrix.flycast_dsp !== undefined) coreSettings['flycast_dsp'] = configMatrix.flycast_dsp ? 'enabled' : 'disabled';
 
+    return coreSettings;
+  }
+
+  async setConfig(configMatrix: any): Promise<void> {
+    const coreSettings = CapacitorEngineAdapter.translateConfig(configMatrix);
+    
+    // Global Settings
+    if (configMatrix.global_frame_skip !== undefined) {
+      await CapivaraEngine.setFrameSkip({ skip: Number(configMatrix.global_frame_skip) });
+    }
+    
+
+
     try {
       await CapivaraEngine.updateCoreOptions(coreSettings);
       console.log('[KILLCAM - Adapter] Configuração injetada no JNI:', coreSettings);
@@ -93,6 +104,19 @@ export class CapacitorEngineAdapter implements EnginePort {
       console.error(`{"error": "ERR_INTERNAL", "correlation_id": "engine_start_fail"}`);
       throw new Error("ERR_INTERNAL");
     }
+  }
+
+  async startCasting(): Promise<void> {
+    await CapivaraEngine.startCasting();
+  }
+
+  async stopCasting(): Promise<void> {
+    await CapivaraEngine.stopCasting();
+  }
+
+  async getLocalIP(): Promise<string> {
+    const res = await CapivaraEngine.getLocalIP();
+    return res.ip || "127.0.0.1";
   }
 
   async pause(): Promise<void> {

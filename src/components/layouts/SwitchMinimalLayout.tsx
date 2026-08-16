@@ -4,6 +4,9 @@ import { sfx } from '../../utils/sfx';
 
 import { CapyLogo } from '../CapyLogo';
 import { RomFolderPickerModal } from '../RomFolderPickerModal';
+import { CastButton } from '../CastButton';
+import { GameScraperService } from '../../services/GameScraperService';
+import { useGamepadNavigation } from '../../hooks/useGamepadNavigation';
 
 export interface SwitchMinimalLayoutProps {
   tenants: TenantInfo[];
@@ -13,6 +16,7 @@ export interface SwitchMinimalLayoutProps {
   onOpenAutofire: (tenant: TenantInfo) => void;
   onToggleLayout: () => void;
   onRomsMapped: () => void;
+  initialTenantId?: string | null;
 }
 
 export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({ 
@@ -22,16 +26,35 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
   onOpenSaves, 
   onOpenAutofire,
   onToggleLayout,
-  onRomsMapped
+  onRomsMapped,
+  initialTenantId
 }) => {
-  const [selectedTenant, setSelectedTenant] = useState<TenantInfo | null>(null);
-  const [activeTenantIdx, setActiveTenantIdx] = useState(0);
+  const [selectedTenant, setSelectedTenant] = useState<TenantInfo | null>(() => {
+    if (initialTenantId) return tenants.find(t => t.id === initialTenantId) || null;
+    return null;
+  });
+  
+  const [activeTenantIdx, setActiveTenantIdx] = useState(() => {
+    if (initialTenantId) {
+      const idx = tenants.findIndex(t => t.id === initialTenantId);
+      return idx >= 0 ? idx : 0;
+    }
+    return 0;
+  });
   const [activeGameIdx, setActiveGameIdx] = useState(0);
   const [romPickerTenant, setRomPickerTenant] = useState<TenantInfo | null>(null);
   const [currentTime, setCurrentTime] = useState('14:45 PM');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Enable gamepad navigation globally for this layout
+  useGamepadNavigation(!romPickerTenant);
+
   const activeCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset activeGameIdx when searchQuery changes
+  useEffect(() => {
+    setActiveGameIdx(0);
+  }, [searchQuery]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -136,6 +159,9 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
           </div>
 
           <div className="flex items-center space-x-3 sm:space-x-5">
+            {/* Cast Button */}
+            <CastButton />
+
             {/* FPS & Performance Badge */}
             <div className="hidden sm:flex px-3 py-1 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
               <span className="text-[10px] font-bold text-cyan-400">1080P • 60 FPS</span>
@@ -218,16 +244,27 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
                           : 'border-white/5 hover:border-white/20 bg-zinc-900/50 hover:bg-zinc-900/80'
                       }`}
                     >
-                      {/* Background Image */}
+                      {/* Dynamic Color Gradient Background */}
+                      <div 
+                        className="absolute inset-0 opacity-40 group-hover:opacity-70 transition-opacity duration-500"
+                        style={{ 
+                          background: `radial-gradient(circle at 100% 0%, ${t.color}80 0%, transparent 70%), linear-gradient(135deg, ${t.color}20 0%, #000000 100%)` 
+                        }}
+                      />
+                      
+                      {/* Background Image (If available) */}
                       {t.heroImage && (
                         <>
                           <div 
-                            className="absolute inset-0 bg-cover bg-center opacity-30 group-hover:opacity-50 transition-opacity duration-300 group-hover:scale-105"
+                            className="absolute inset-0 bg-cover bg-center opacity-20 group-hover:opacity-40 mix-blend-overlay transition-transform duration-700 group-hover:scale-110"
                             style={{ backgroundImage: `url(${t.heroImage})` }}
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/80 to-zinc-900/40 pointer-events-none" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none" />
                         </>
                       )}
+                      
+                      {/* Geometric Tech Pattern Overlay */}
+                      <div className="absolute inset-0 opacity-[0.03] mix-blend-screen pointer-events-none" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
 
                       <div className="relative z-10 flex justify-between items-start">
                         <div className="w-10 h-10 rounded-xl bg-black/50 backdrop-blur-md flex items-center justify-center text-xl border border-white/10 shadow-md">
@@ -347,17 +384,25 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
                       <div className="relative group w-full aspect-[21/9] sm:aspect-[4/5] rounded-3xl overflow-hidden border-4 border-cyan-500 shadow-2xl shadow-cyan-500/20 shrink-0 bg-zinc-900">
                         {activeGame.boxArtUrl ? (
                           <>
-                            <img 
-                              src={activeGame.boxArtUrl} 
-                              alt={activeGame.title} 
-                              referrerPolicy="no-referrer"
-                              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                const fallback = e.currentTarget.nextElementSibling;
-                                if (fallback) fallback.classList.remove('hidden');
-                              }}
-                            />
+                              <img 
+                                src={GameScraperService.getCachedUrl(activeGame.id) || activeGame.boxArtUrl} 
+                                alt={activeGame.title} 
+                                referrerPolicy="no-referrer"
+                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                                onLoad={(e) => GameScraperService.setCachedUrl(activeGame.id, e.currentTarget.src)}
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  const retryCount = parseInt(target.dataset.retryCount || '0', 10);
+                                  const nextUrl = GameScraperService.getNextBoxartFallback(selectedTenant.id, activeGame.title, activeGame.fileName, retryCount + 1);
+                                  
+                                  if (nextUrl) {
+                                    target.dataset.retryCount = (retryCount + 1).toString();
+                                    target.src = nextUrl;
+                                    return;
+                                  }
+                                  target.src = GameScraperService.generateFallbackCover(activeGame.title, selectedTenant.color);
+                                }}
+                              />
                             <div className={`absolute inset-0 hidden bg-gradient-to-br ${activeGame.banner || 'from-indigo-900 to-purple-900'} flex items-center justify-center p-6 text-center`}>
                               <div>
                                 <div className="text-5xl mb-3">⚔️</div>
@@ -459,17 +504,27 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
                             {/* Box Art / Icon Background */}
                             {game.boxArtUrl ? (
                               <img 
-                                src={game.boxArtUrl} 
+                                src={GameScraperService.getCachedUrl(game.id) || game.boxArtUrl} 
                                 alt={game.title} 
                                 referrerPolicy="no-referrer"
-                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
+                                className="absolute inset-0 w-full h-full object-cover opacity-100 transition-opacity"
+                                onLoad={(e) => GameScraperService.setCachedUrl(game.id, e.currentTarget.src)}
                                 onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
+                                  const target = e.currentTarget;
+                                  const retryCount = parseInt(target.dataset.retryCount || '0', 10);
+                                  const nextUrl = GameScraperService.getNextBoxartFallback(selectedTenant.id, game.title, game.fileName, retryCount + 1);
+                                  
+                                  if (nextUrl) {
+                                    target.dataset.retryCount = (retryCount + 1).toString();
+                                    target.src = nextUrl;
+                                    return;
+                                  }
+                                  target.src = GameScraperService.generateFallbackCover(game.title, selectedTenant.color);
                                 }}
                               />
                             ) : null}
 
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-black/30 pointer-events-none" />
+                            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/10 to-transparent pointer-events-none" />
 
                             {/* Top Badge */}
                             <div className="relative z-10 w-full flex justify-between items-center text-[9px] font-mono">

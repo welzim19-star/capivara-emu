@@ -63,6 +63,14 @@ export function useEngineLifecycle({
           }
         }
 
+        // Traduz as configurações da UI usando o Adapter (incluindo AES mode, shaders, etc)
+        const { CapacitorEngineAdapter } = await import('../adapters/native/CapacitorEngineAdapter');
+        const translatedConfig = CapacitorEngineAdapter.translateConfig(configMatrix);
+
+        Object.entries(translatedConfig).forEach(([k, v]) => {
+           if (!libretroConfig[k] && typeof v === 'string') libretroConfig[k] = v;
+        });
+
         Object.entries(configMatrix).forEach(([k, v]) => {
            if (!libretroConfig[k] && typeof v === 'string') libretroConfig[k] = v;
         });

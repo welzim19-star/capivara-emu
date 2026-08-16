@@ -316,6 +316,11 @@ export const SettingsMenu: React.FC<Props> = ({
                       <span className="text-sky-400 font-bold text-sm">Netplay Multiplayer</span>
                     </button>
 
+                    <button onClick={onStartCasting} className="w-full py-4 rounded-2xl bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 flex flex-col items-center justify-center gap-2 transition-all">
+                      <span className="text-3xl mb-1">📺</span>
+                      <span className="text-teal-400 font-bold text-sm">Cast para TV</span>
+                    </button>
+
                     {tenant.id === 'PS2_NETHERSX2' && (
                       <button onClick={() => setShowMemCard(true)} className="w-full py-4 rounded-2xl bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 flex flex-col items-center justify-center gap-2 transition-all">
                         <span className="text-3xl mb-1">🎴</span>

@@ -62,7 +62,7 @@ export class GameScraperService {
   }
 
   // ── SVG Fallback Generator ────────────────────────────────────────────────
-  private static generateFallbackCover(title: string, color: string): string {
+  public static generateFallbackCover(title: string, color: string): string {
     const shortTitle = title.substring(0, 18) + (title.length > 18 ? '...' : '');
     const svg = `<svg width="300" height="420" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -132,14 +132,11 @@ export class GameScraperService {
       // Libretro requires the exact cleaned name without extensions, but allows regions sometimes
       // We will try the clean name. URL Encoding is required.
       // Example: https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Super%20Mario%20World.png
-      // Since we don't know the exact goodset name, we try the clean title.
-      // A better approach is to try with original base name first (without extension), then clean name.
-      const baseName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
       const encodedSystem = encodeURIComponent(systemName);
       
       // We return the raw Libretro URL. If it fails to load, the frontend should fallback to SVG (or we handle it via onError in the img tag).
       // Since we want this fast, we don't verify the URL via fetch here. We just return it.
-      const libretroUrl = `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(baseName)}.png`;
+      const libretroUrl = `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(title)}.png`;
       
       return { title, coverUrl: libretroUrl };
     }
@@ -147,5 +144,79 @@ export class GameScraperService {
     // 3. SVG final fallback
     const cover = this.generateFallbackCover(title, cleanColor);
     return { title, coverUrl: cover };
+  }
+
+  // ── Helper to generate alternative libretro URLs on error ────────────
+  public static getNextBoxartFallback(tenantId: string, title: string, fileName: string, retryCount: number): string | null {
+    const systemName = this.getLibretroSystemName(tenantId);
+    if (!systemName) return null;
+    const encodedSystem = encodeURIComponent(systemName);
+
+    if (retryCount === 1) {
+      // Attempt 1: Raw base filename
+      const baseName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+      return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(baseName)}.png`;
+    }
+
+    if (retryCount === 2) {
+      // Attempt 2: Title completely stripped of regions and tags (e.g. "Super Mario World")
+      const cleanTitle = title.replace(/\s*\(.*?\)\s*/g, '').replace(/\s*\[.*?\]\s*/g, '').trim();
+      if (cleanTitle !== title) {
+        return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(cleanTitle)}.png`;
+      }
+    }
+
+    if (retryCount === 3) {
+      // Attempt 3: Try to force " (USA)" suffix
+      const cleanTitle = title.replace(/\s*\(.*?\)\s*/g, '').replace(/\s*\[.*?\]\s*/g, '').trim();
+      return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(cleanTitle + ' (USA)')}.png`;
+    }
+
+    if (retryCount === 4) {
+      // Attempt 4: Try to force " (Europe)" suffix
+      const cleanTitle = title.replace(/\s*\(.*?\)\s*/g, '').replace(/\s*\[.*?\]\s*/g, '').trim();
+      return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(cleanTitle + ' (Europe)')}.png`;
+    }
+
+    if (retryCount === 5) {
+      // Attempt 5: Base filename stripped of regions and tags
+      const baseName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+      const cleanBaseName = baseName.replace(/\s*\(.*?\)\s*/g, '').replace(/\s*\[.*?\]\s*/g, '').trim();
+      if (cleanBaseName !== baseName) {
+        return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(cleanBaseName)}.png`;
+      }
+    }
+
+    if (retryCount === 6) {
+      // Attempt 6: Just the first 3 words of the clean title
+      const cleanTitle = title.replace(/\s*\(.*?\)\s*/g, '').replace(/\s*\[.*?\]\s*/g, '').trim();
+      const firstWords = cleanTitle.split(' ').slice(0, 3).join(' ');
+      if (firstWords !== title && firstWords.length > 3) {
+        return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(firstWords)}.png`;
+      }
+    }
+
+    if (retryCount === 7) {
+      // Attempt 7: First 3 words + (USA)
+      const cleanTitle = title.replace(/\s*\(.*?\)\s*/g, '').replace(/\s*\[.*?\]\s*/g, '').trim();
+      const firstWords = cleanTitle.split(' ').slice(0, 3).join(' ');
+      if (firstWords.length > 3) {
+        return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodeURIComponent(firstWords + ' (USA)')}.png`;
+      }
+    }
+
+    return null;
+  }
+
+  // ── Cache Mechanism ────────────
+  public static getCachedUrl(gameId: string): string | null {
+    return localStorage.getItem(`boxart_${gameId}`);
+  }
+
+  public static setCachedUrl(gameId: string, url: string) {
+    // Only cache libretro URLs, not the SVG data URIs
+    if (url.startsWith('http')) {
+      localStorage.setItem(`boxart_${gameId}`, url);
+    }
   }
 }

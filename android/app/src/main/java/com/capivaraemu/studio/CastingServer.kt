@@ -68,9 +68,55 @@ object CastingServer {
         val html = """
             <!DOCTYPE html>
             <html>
-            <head><title>Capivara Cast</title></head>
-            <body style="background:#000; margin:0; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden;">
-                <img src="/stream" style="width:100%; height:100%; object-fit:contain;" />
+            <head>
+                <title>Capivara Cast</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                <style>
+                    body { background:#000; margin:0; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; }
+                    #stream { width:100%; height:100%; object-fit:contain; transition: transform 0.3s ease; }
+                    .hud { position:absolute; top:20px; right:20px; display:flex; flex-direction:column; gap:10px; opacity:0.3; transition: opacity 0.3s; z-index:999; }
+                    .hud:hover { opacity:1; }
+                    .btn { background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); color:#fff; padding:12px 20px; border-radius:8px; font-family:sans-serif; cursor:pointer; backdrop-filter:blur(5px); font-size:16px; font-weight:bold; }
+                    .btn:hover { background:rgba(255,255,255,0.2); }
+                </style>
+                <script>
+                    let currentZoom = 1;
+                    let isFlipped = false;
+                    
+                    function toggleFit() {
+                        const img = document.getElementById('stream');
+                        img.style.objectFit = img.style.objectFit === 'cover' ? 'contain' : 'cover';
+                    }
+                    
+                    function toggleFlip() {
+                        isFlipped = !isFlipped;
+                        updateTransform();
+                    }
+                    
+                    function zoomIn() {
+                        currentZoom += 0.5;
+                        updateTransform();
+                    }
+                    
+                    function zoomOut() {
+                        currentZoom = Math.max(0.5, currentZoom - 0.5);
+                        updateTransform();
+                    }
+                    
+                    function updateTransform() {
+                        const img = document.getElementById('stream');
+                        img.style.transform = 'scale(' + currentZoom + ') ' + (isFlipped ? 'scaleY(-1)' : '');
+                    }
+                </script>
+            </head>
+            <body>
+                <img id="stream" src="/stream" />
+                <div class="hud">
+                    <button class="btn" onclick="toggleFit()">↕️ Preencher/Ajustar</button>
+                    <button class="btn" onclick="toggleFlip()">🔄 Inverter N64</button>
+                    <button class="btn" onclick="zoomIn()">🔍 Zoom +</button>
+                    <button class="btn" onclick="zoomOut()">🔍 Zoom -</button>
+                </div>
             </body>
             </html>
         """.trimIndent()
@@ -92,6 +138,9 @@ object CastingServer {
                 "Cache-Control: no-cache\r\n\r\n"
         output.write(header.toByteArray())
         output.flush()
+
+        // Cache the standby frame to avoid generating it 30 times a second
+        var standbyJpegData: ByteArray? = null
 
         while (isRunning) {
             try {
@@ -121,8 +170,33 @@ object CastingServer {
                     output.write(jpegData)
                     output.write("\r\n".toByteArray())
                     output.flush()
+                } else {
+                    if (standbyJpegData == null) {
+                        val standbyBitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
+                        val canvas = android.graphics.Canvas(standbyBitmap)
+                        canvas.drawColor(android.graphics.Color.BLACK)
+                        
+                        val paint = android.graphics.Paint()
+                        paint.color = android.graphics.Color.WHITE
+                        paint.textSize = 30f
+                        paint.textAlign = android.graphics.Paint.Align.CENTER
+                        canvas.drawText("Aguardando jogo na Capivara...", 320f, 240f, paint)
+
+                        val bos = ByteArrayOutputStream()
+                        standbyBitmap.compress(Bitmap.CompressFormat.JPEG, 70, bos)
+                        standbyJpegData = bos.toByteArray()
+                    }
+                    
+                    val frameHeader = "--$boundary\r\n" +
+                            "Content-Type: image/jpeg\r\n" +
+                            "Content-Length: ${standbyJpegData!!.size}\r\n\r\n"
+                    
+                    output.write(frameHeader.toByteArray())
+                    output.write(standbyJpegData!!)
+                    output.write("\r\n".toByteArray())
+                    output.flush()
                 }
-                Thread.sleep(33) // ~30 FPS
+                Thread.sleep(100) // Lower FPS when waiting
             } catch (e: Exception) {
                 break
             }
