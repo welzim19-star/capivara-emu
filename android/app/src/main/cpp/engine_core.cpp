@@ -24,7 +24,7 @@ static void retro_log_cb(enum retro_log_level level, const char* fmt, ...) {
 }
 
 // ── HW Render Proc-Address Helpers ───────────────────────────────────────────
-static uintptr_t retro_hw_get_current_framebuffer() { return 0; }
+static uintptr_t retro_hw_get_current_framebuffer() { return g_hw_fbo; }
 
 static retro_proc_address_t retro_hw_get_proc_address(const char* sym) {
     retro_proc_address_t fn = (retro_proc_address_t)eglGetProcAddress(sym);
