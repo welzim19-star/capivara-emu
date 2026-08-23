@@ -143,13 +143,20 @@ void GameLoop() {
 
     // ── 7. Init Audio & AV Info ───────────────────────────────────────────────
     retro_system_av_info av_info = {};
-    if (core.get_system_av_info) core.get_system_av_info(&av_info);
+    if (core.get_system_av_info) {
+        core.get_system_av_info(&av_info);
+        if (av_info.geometry.base_width > 0 && av_info.geometry.base_height > 0) {
+            g_video_width  = av_info.geometry.base_width;
+            g_video_height = av_info.geometry.base_height;
+        }
+    }
 
     initAudio(av_info.timing.sample_rate);
 
-    LOGI("Core: %s v%s | FPS: %.2f | SampleRate: %.0f Hz",
+    LOGI("Core: %s v%s | FPS: %.2f | SampleRate: %.0f Hz | Geom: %ux%u",
          sys_info.library_name, sys_info.library_version,
-         av_info.timing.fps, av_info.timing.sample_rate);
+         av_info.timing.fps, av_info.timing.sample_rate,
+         g_video_width, g_video_height);
 
     const int frameTimeUs = (int)(1000000.0 / (av_info.timing.fps > 0 ? av_info.timing.fps : 60.0));
 
@@ -250,6 +257,11 @@ void GameLoop() {
                 rewindIndex = (rewindIndex - 1 + REWIND_MAX_STATES) % REWIND_MAX_STATES;
                 core.unserialize(rewindBuffer[rewindIndex].data(), serializeSize);
             } else {
+                // For HW-rendered cores, bind the target FBO before executing the frame
+                if (g_hw_render_active && g_hw_fbo != 0) {
+                    glBindFramebuffer(GL_FRAMEBUFFER, g_hw_fbo);
+                }
+
                 // Normal execution
                 if (core.run) core.run();
 

@@ -159,11 +159,25 @@ void setup_hw_fbo() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_hw_fbo_tex, 0);
 
-    if (g_hw_render_cb.depth) {
+    if (g_hw_render_cb.depth || g_hw_render_cb.stencil) {
         glGenRenderbuffers(1, &g_hw_fbo_depth);
         glBindRenderbuffer(GL_RENDERBUFFER, g_hw_fbo_depth);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 2048, 2048);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, g_hw_fbo_depth);
+        if (g_hw_render_cb.depth && g_hw_render_cb.stencil) {
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 2048, 2048);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, g_hw_fbo_depth);
+            LOGI("setup_hw_fbo: Attached packed GL_DEPTH24_STENCIL8 renderbuffer.");
+        } else if (g_hw_render_cb.depth) {
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 2048, 2048);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, g_hw_fbo_depth);
+            LOGI("setup_hw_fbo: Attached GL_DEPTH_COMPONENT24 renderbuffer.");
+        }
+    }
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("setup_hw_fbo: Framebuffer incomplete! status=0x%x", status);
+    } else {
+        LOGI("setup_hw_fbo: Framebuffer complete and active. FBO=%u Tex=%u Depth=%u", g_hw_fbo, g_hw_fbo_tex, g_hw_fbo_depth);
     }
 }
 
