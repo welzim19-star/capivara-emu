@@ -57,14 +57,6 @@ void GameLoop() {
         g_coreAdapter->setupControllerPorts(core.set_controller_port_device);
     }
 
-    // ── 4. HW Render context_reset (if applicable during init) ───────────────
-    bool contextResetFired = false;
-    if (g_hw_render_active && g_hw_render_cb.context_reset) {
-        LOGI("Triggering HW render context_reset after init...");
-        g_hw_render_cb.context_reset();
-        contextResetFired = true;
-    }
-
     // ── 5. Query system info & load ROM ───────────────────────────────────────
     retro_system_info sys_info = {};
     if (core.get_system_info) core.get_system_info(&sys_info);
@@ -121,11 +113,10 @@ void GameLoop() {
     }
     LOGI(">>> GAME LOADED SUCCESSFULLY! Core is running. <<<");
 
-    // ── 5.5 HW Render context_reset (if applicable during load_game) ─────────
-    if (!contextResetFired && g_hw_render_active && g_hw_render_cb.context_reset) {
+    // ── 5.5 HW Render context_reset (MUST ALWAYS run after load_game per Libretro spec) ──
+    if (g_hw_render_active && g_hw_render_cb.context_reset) {
         LOGI("Triggering HW render context_reset after load_game...");
         g_hw_render_cb.context_reset();
-        contextResetFired = true;
     }
     // ── 6. Restore SRAM ───────────────────────────────────────────────────────
     if (core.get_memory_data && core.get_memory_size && !g_sramPath.empty()) {
