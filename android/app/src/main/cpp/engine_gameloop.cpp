@@ -177,6 +177,8 @@ void GameLoop() {
         rewindBuffer.resize(REWIND_MAX_STATES, std::vector<uint8_t>(serializeSize));
     }
 
+    g_surfaceChanged.store(false);
+
     while (g_engineRunning) {
         if (g_surfaceChanged.exchange(false)) {
             recreateEGLSurface();

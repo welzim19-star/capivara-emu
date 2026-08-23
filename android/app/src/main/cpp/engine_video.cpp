@@ -206,10 +206,6 @@ void recreateEGLSurface() {
         LOGE("Failed to make EGL context current after recreation");
     } else {
         LOGI("EGL Surface successfully recreated.");
-        if (g_hw_render_active && g_hw_render_cb.context_reset) {
-            LOGI("Triggering context_reset after surface recreation...");
-            g_hw_render_cb.context_reset();
-        }
     }
 }
 
