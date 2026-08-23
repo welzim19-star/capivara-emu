@@ -4,6 +4,7 @@
 #include "ICoreAdapter.h"
 #include "GenericAdapter.h"
 #include "Mupen64Adapter.h"
+#include "FlycastAdapter.h"
 #include "PlayAdapter.h"
 #include <memory>
 #include <string>
@@ -11,10 +12,11 @@
 class CoreAdapterFactory {
 public:
     static std::unique_ptr<ICoreAdapter> getAdapter(const std::string& corePath, const std::string& systemDir) {
-        if (corePath.find("mupen64plus") != std::string::npos || 
-            corePath.find("flycast") != std::string::npos || 
-            corePath.find("ppsspp") != std::string::npos || 
-            corePath.find("swanstation") != std::string::npos) {
+        if (corePath.find("flycast") != std::string::npos) {
+            return std::make_unique<FlycastAdapter>();
+        } else if (corePath.find("mupen64plus") != std::string::npos || 
+                   corePath.find("ppsspp") != std::string::npos || 
+                   corePath.find("swanstation") != std::string::npos) {
             return std::make_unique<Mupen64Adapter>();
         } else if (corePath.find("play") != std::string::npos || corePath.find("nethersx2") != std::string::npos) {
             return std::make_unique<PlayAdapter>(systemDir);

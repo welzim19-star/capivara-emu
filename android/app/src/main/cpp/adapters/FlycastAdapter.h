@@ -47,20 +47,54 @@ public:
         g_core_options["reicast_digital_triggers"]      = "enabled";            // Allow digital L/R on touchpads
 
         // ── Direct Game Boot with European NVRAM Flash ───────────────────────
-        // Sonic Adventure 2 (Europe) checks the Flash ROM region. We create a European PAL dc_flash.bin.
         bool hasBootBin = false;
-        if (!g_internalFilesDir.empty()) {
-            std::string dcDir     = g_internalFilesDir + "/system/dc";
-            std::string bootPath  = dcDir + "/dc_boot.bin";
-            std::string flashPath = dcDir + "/dc_flash.bin";
-            mkdir(dcDir.c_str(), 0777);
+        std::vector<std::string> searchDirs;
+        if (!g_systemDir.empty()) {
+            searchDirs.push_back(g_systemDir + "/dc");
+            searchDirs.push_back(g_systemDir);
+        }
+        if (!g_saveDir.empty()) {
+            searchDirs.push_back(g_saveDir + "/dc");
+            searchDirs.push_back(g_saveDir);
+        }
 
-            struct stat stBoot{};
-            if (stat(bootPath.c_str(), &stBoot) == 0 && stBoot.st_size >= 1048576) {
+        std::string foundBootPath = "";
+        for (const auto& dir : searchDirs) {
+            std::string bp = dir + "/dc_boot.bin";
+            struct stat st{};
+            if (stat(bp.c_str(), &st) == 0 && st.st_size >= 1048576) {
                 hasBootBin = true;
-                LOGI_FLYCAST("[BIOS] Genuine dc_boot.bin detected (%ld bytes) — activating REAL Dreamcast hardware boot!", (long)stBoot.st_size);
+                foundBootPath = bp;
+                LOGI_FLYCAST("[BIOS] Genuine dc_boot.bin detected at %s (%ld bytes) — activating REAL Dreamcast hardware boot!", bp.c_str(), (long)st.st_size);
+                break;
+            }
+        }
+
+        // Ensure dc/ subfolder exists in system dir and has dc_boot.bin and European dc_flash.bin
+        for (const auto& dir : searchDirs) {
+            mkdir(dir.c_str(), 0777);
+            if (hasBootBin && !foundBootPath.empty()) {
+                std::string targetBoot = dir + "/dc_boot.bin";
+                if (targetBoot != foundBootPath) {
+                    struct stat stT{};
+                    if (stat(targetBoot.c_str(), &stT) != 0 || stT.st_size < 1048576) {
+                        // Copy to ensure Flycast finds it wherever it looks
+                        FILE* src = fopen(foundBootPath.c_str(), "rb");
+                        if (src) {
+                            FILE* dst = fopen(targetBoot.c_str(), "wb");
+                            if (dst) {
+                                char buf[8192];
+                                size_t n;
+                                while ((n = fread(buf, 1, sizeof(buf), src)) > 0) fwrite(buf, 1, n, dst);
+                                fclose(dst);
+                            }
+                            fclose(src);
+                        }
+                    }
+                }
             }
 
+            std::string flashPath = dir + "/dc_flash.bin";
             struct stat stFlash{};
             if (stat(flashPath.c_str(), &stFlash) != 0 || stFlash.st_size < 131072) {
                 std::vector<uint8_t> flash(131072, 0xFF);
@@ -73,7 +107,7 @@ public:
                 if (f) {
                     fwrite(flash.data(), 1, flash.size(), f);
                     fclose(f);
-                    LOGI_FLYCAST("[FLASH] Generated European PAL dc_flash.bin");
+                    LOGI_FLYCAST("[FLASH] Generated European PAL dc_flash.bin at %s", flashPath.c_str());
                 }
             }
         }

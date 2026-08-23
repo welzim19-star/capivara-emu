@@ -230,10 +230,10 @@ export const ArcadeGamepad: React.FC<{ onEmit: EmitBtn; sixButton?: boolean }> =
         {sixButton && btn(10, 'L1', 'rgba(22,163,74,0.9)', { bottom: 30, right: 20 })}
       </div>
       
-      {/* Coin / Start in Arcade are usually Select / Start */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-4 flex gap-8" style={{ pointerEvents: 'auto' }}>
-        <button data-btn-id={2} className="px-4 py-2 bg-red-600/30 border border-red-500/50 text-red-300 font-bold text-xs tracking-widest rounded-full">COIN</button>
-        <button data-btn-id={3} className="px-4 py-2 bg-green-600/30 border border-green-500/50 text-green-300 font-bold text-xs tracking-widest rounded-full">START</button>
+      {/* Coin / Start in Arcade are aligned bottom-center like Select / Start */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-4 flex gap-6" style={{ pointerEvents: 'auto' }}>
+        <button data-btn-id={2} className="px-4 py-2 bg-red-600/30 border border-red-500/50 text-red-300 font-bold text-xs tracking-widest rounded-full select-none touch-none active:scale-90">COIN</button>
+        <button data-btn-id={3} className="px-4 py-2 bg-green-600/30 border border-green-500/50 text-green-300 font-bold text-xs tracking-widest rounded-full select-none touch-none active:scale-90">START</button>
       </div>
     </div>
   );

@@ -62,16 +62,29 @@ export class CapacitorEngineAdapter implements EnginePort {
     if (configMatrix.vu_cycle_stealing) coreSettings['pcsx2_vu_cycle_stealing'] = String(configMatrix.vu_cycle_stealing);
 
     // N64 (Mupen64Plus-Next)
-    if (configMatrix.rdpPlugin) coreSettings['mupen64plus-next-rdp-plugin'] = String(configMatrix.rdpPlugin).toLowerCase();
-    if (configMatrix.resolution) coreSettings['mupen64plus-next-43res'] = String(configMatrix.resolution);
-    if (configMatrix.framerate_hack !== undefined) coreSettings['mupen64plus-next-virefresh'] = configMatrix.framerate_hack ? 'True' : 'False';
-    if (configMatrix.cpucore) coreSettings['mupen64plus-next-cpucore'] = String(configMatrix.cpucore);
+    if (configMatrix.playResMulti !== undefined) {
+      const mult = Math.max(1, Math.min(4, Number(configMatrix.playResMulti) || 2));
+      coreSettings['mupen64plus-EnableNativeResFactor'] = String(mult);
+      if (mult === 1) coreSettings['mupen64plus-43screensize'] = '640x480';
+      else if (mult === 2) coreSettings['mupen64plus-43screensize'] = '1280x960';
+      else if (mult === 3) coreSettings['mupen64plus-43screensize'] = '1920x1440';
+      else if (mult >= 4) coreSettings['mupen64plus-43screensize'] = '2560x1920';
+    }
+    if (configMatrix.rdpPlugin) coreSettings['mupen64plus-rdp-plugin'] = String(configMatrix.rdpPlugin).toLowerCase();
+    if (configMatrix.framerate_hack !== undefined) coreSettings['mupen64plus-virefresh'] = configMatrix.framerate_hack ? 'True' : 'False';
+    if (configMatrix.cpucore) coreSettings['mupen64plus-cpucore'] = String(configMatrix.cpucore);
 
     // Dreamcast (Flycast)
-    if (configMatrix.flycast_internal_resolution) coreSettings['flycast_internal_resolution'] = String(configMatrix.flycast_internal_resolution).split(' ')[0];
-    if (configMatrix.flycast_widescreen_hack !== undefined) coreSettings['flycast_widescreen_hack'] = configMatrix.flycast_widescreen_hack ? 'enabled' : 'disabled';
-    if (configMatrix.flycast_cable_type) coreSettings['flycast_cable_type'] = configMatrix.flycast_cable_type.includes('VGA') ? '0' : '1';
-    if (configMatrix.flycast_dsp !== undefined) coreSettings['flycast_dsp'] = configMatrix.flycast_dsp ? 'enabled' : 'disabled';
+    if (configMatrix.playResMulti !== undefined) {
+      const mult = Number(configMatrix.playResMulti);
+      if (mult === 1) coreSettings['reicast_internal_resolution'] = '640x480';
+      else if (mult === 2) coreSettings['reicast_internal_resolution'] = '1280x960';
+      else if (mult >= 3) coreSettings['reicast_internal_resolution'] = '1920x1440';
+    }
+    if (configMatrix.flycast_internal_resolution) coreSettings['reicast_internal_resolution'] = String(configMatrix.flycast_internal_resolution).split(' ')[0];
+    if (configMatrix.flycast_widescreen_hack !== undefined) coreSettings['reicast_widescreen_hack'] = configMatrix.flycast_widescreen_hack ? 'enabled' : 'disabled';
+    if (configMatrix.flycast_cable_type) coreSettings['reicast_cable_type'] = configMatrix.flycast_cable_type.includes('VGA') ? '0' : '1';
+    if (configMatrix.flycast_dsp !== undefined) coreSettings['reicast_enable_dsp'] = configMatrix.flycast_dsp ? 'enabled' : 'disabled';
 
     return coreSettings;
   }

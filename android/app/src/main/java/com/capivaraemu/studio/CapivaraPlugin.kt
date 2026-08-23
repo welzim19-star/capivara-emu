@@ -170,11 +170,11 @@ class CapivaraPlugin : Plugin() {
         }
         val configStr = sb.toString()
 
-        val sysDir = File(context.getExternalFilesDir(null), "system/bios")
+        val sysDir = File(context.filesDir, "system/bios")
         sysDir.mkdirs()
         
 
-        val saveDir = File(context.getExternalFilesDir(null), "saves")
+        val saveDir = File(context.filesDir, "saves")
         saveDir.mkdirs()
 
         CapivaraEngine.setSystemDirectory(sysDir.absolutePath, saveDir.absolutePath)
@@ -186,6 +186,7 @@ class CapivaraPlugin : Plugin() {
                 
                 val targetDirs = listOf(
                     sysDir, // system/bios
+                    File(sysDir, "dc"), // system/bios/dc (Strict Dreamcast Flycast path!)
                     File(context.getExternalFilesDir(null), "system"),
                     File(context.getExternalFilesDir(null), "system/dc"),
                     File(context.filesDir, "system"),
@@ -196,11 +197,43 @@ class CapivaraPlugin : Plugin() {
                     File(context.getExternalFilesDir(null), "system/pcsx2/bios")
                 )
 
-                for (dir in targetDirs) {
-                    dir.mkdirs()
-                    val targetFile = File(dir, biosFileName)
-                    context.contentResolver.openInputStream(biosUri)?.use { input ->
-                        FileOutputStream(targetFile).use { output -> input.copyTo(output) }
+                if (biosFileName.endsWith(".zip", ignoreCase = true)) {
+                    udpLog("ZIP BIOS detected ($biosFileName). Extracting all entries into system paths...")
+                    for (dir in targetDirs) {
+                        dir.mkdirs()
+                        context.contentResolver.openInputStream(biosUri)?.use { input ->
+                            ZipInputStream(input).use { zis ->
+                                var entry = zis.nextEntry
+                                while (entry != null) {
+                                    if (!entry.isDirectory) {
+                                        val entryName = File(entry.name).name // avoid subfolder issues
+                                        val extractedFile = File(dir, entryName)
+                                        FileOutputStream(extractedFile).use { output ->
+                                            zis.copyTo(output)
+                                        }
+                                        extractedFile.setReadable(true, false)
+                                        udpLog("[BIOS-UNZIP] Extracted ${entryName} (${extractedFile.length()} bytes) -> ${extractedFile.absolutePath}")
+                                    }
+                                    entry = zis.nextEntry
+                                }
+                            }
+                        }
+                    }
+                    // Also copy the .zip itself in case MAME/FBNeo needs the raw zip (e.g. neogeo.zip)
+                    for (dir in targetDirs) {
+                        val targetZip = File(dir, biosFileName)
+                        context.contentResolver.openInputStream(biosUri)?.use { input ->
+                            FileOutputStream(targetZip).use { output -> input.copyTo(output) }
+                        }
+                    }
+                } else {
+                    for (dir in targetDirs) {
+                        dir.mkdirs()
+                        val targetFile = File(dir, biosFileName)
+                        context.contentResolver.openInputStream(biosUri)?.use { input ->
+                            FileOutputStream(targetFile).use { output -> input.copyTo(output) }
+                        }
+                        targetFile.setReadable(true, false)
                     }
                 }
 
