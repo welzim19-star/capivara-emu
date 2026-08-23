@@ -4,6 +4,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { StatusBar } from '@capacitor/status-bar';
 import { GameItem, TenantInfo } from '../types';
+import { CapacitorEngineAdapter } from '../adapters/native/CapacitorEngineAdapter';
 
 const CapivaraEngine = registerPlugin<any>('CapivaraEngine');
 
@@ -64,7 +65,6 @@ export function useEngineLifecycle({
         }
 
         // Traduz as configurações da UI usando o Adapter (incluindo AES mode, shaders, etc)
-        const { CapacitorEngineAdapter } = await import('../adapters/native/CapacitorEngineAdapter');
         const translatedConfig = CapacitorEngineAdapter.translateConfig(configMatrix);
 
         Object.entries(translatedConfig).forEach(([k, v]) => {

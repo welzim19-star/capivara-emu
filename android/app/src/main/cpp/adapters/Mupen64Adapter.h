@@ -29,7 +29,14 @@ public:
     }
 
     void injectVariables() override {
-        // Handle Mupen64 specific variables
+        LOGI_MUPEN("Injecting optimal Mupen64Plus-Next GLideN64 variables...");
+        // Set standard GLES3 GLideN64 plugin options for 100% Banjo-Kazooie & Mario 64 compatibility
+        g_core_options["mupen64plus-rdp-plugin"] = "gliden64";
+        g_core_options["mupen64plus-rsp-plugin"] = "hle";
+        g_core_options["mupen64plus-43screensize"] = "640x480";
+        g_core_options["mupen64plus-cpucore"] = "dynamic_recompiler";
+        g_core_options["mupen64plus-txHiresEnable"] = "False";
+        g_core_options["mupen64plus-EnableNativeResFactor"] = "1";
     }
 };
 
