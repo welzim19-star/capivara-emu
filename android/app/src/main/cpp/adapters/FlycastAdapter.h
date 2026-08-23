@@ -41,10 +41,13 @@ public:
         g_core_options["reicast_fog"]                   = "enabled";
         g_core_options["reicast_cable_type"]            = "TV (RGB)";           // TV RGB: 100% compatible with both PAL and NTSC games (avoids anti-VGA PAL crashes)
         g_core_options["reicast_broadcast"]             = "Auto";               // Automatically detects PAL vs NTSC from game header
-        g_core_options["reicast_region"]                = "Auto";               // Automatically matches game region
         g_core_options["reicast_internal_resolution"]   = "640x480";
         g_core_options["reicast_gdrom_fast_loading"]    = "enabled";            // Fast track seek on CHD/GDI
         g_core_options["reicast_digital_triggers"]      = "enabled";            // Allow digital L/R on touchpads
+        g_core_options["reicast_device_port1_slot1"]    = "VMU";
+        g_core_options["reicast_device_port1_slot2"]    = "Vibration Pack";
+        g_core_options["reicast_device_port2_slot1"]    = "VMU";
+        g_core_options["reicast_per_content_vmus"]      = "disabled";
 
         // ── Direct Game Boot with European NVRAM Flash ───────────────────────
         bool hasBootBin = false;

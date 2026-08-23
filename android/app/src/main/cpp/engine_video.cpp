@@ -314,12 +314,36 @@ void renderFrame(bool skipEglSwap) {
     if (g_eglDisplay == EGL_NO_DISPLAY || g_eglSurface == EGL_NO_SURFACE || !g_engineRunning) return;
 
     if (g_hw_render_active) {
-        // HW Render (Direct EGL Framebuffer 0): the core's GPU renderer drew directly into Framebuffer 0.
-        // We do NOT clear the screen or draw a quad over it. We simply swap the buffers!
+        int winW = ANativeWindow_getWidth(g_window);
+        int winH = ANativeWindow_getHeight(g_window);
+
+        // Scale and center the 3D rendered frame to the full Android display (4:3 aspect)
+        if (winW > 0 && winH > 0 && g_video_width > 0 && g_video_height > 0 && (winW != (int)g_video_width || winH != (int)g_video_height)) {
+            float targetAspect = 4.0f / 3.0f;
+            float windowAspect = (float)winW / (float)winH;
+            int dstW, dstH, dstX, dstY;
+
+            if (windowAspect > targetAspect) {
+                dstH = winH;
+                dstW = (int)(winH * targetAspect);
+                dstX = (winW - dstW) / 2;
+                dstY = 0;
+            } else {
+                dstW = winW;
+                dstH = (int)(winW / targetAspect);
+                dstX = 0;
+                dstY = (winH - dstH) / 2;
+            }
+
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            glBlitFramebuffer(0, 0, g_video_width, g_video_height,
+                              dstX, dstY, dstX + dstW, dstY + dstH,
+                              GL_COLOR_BUFFER_BIT, GL_LINEAR);
+        }
+
         if (g_screenshotRequest.load()) {
             std::lock_guard<std::mutex> lock(g_screenshotMutex);
-            int winW = ANativeWindow_getWidth(g_window);
-            int winH = ANativeWindow_getHeight(g_window);
             if (winW > 0 && winH > 0) {
                 g_screenshotBuffer.resize(winW * winH * 4);
                 glReadPixels(0, 0, winW, winH, GL_RGBA, GL_UNSIGNED_BYTE, g_screenshotBuffer.data());

@@ -200,6 +200,17 @@ int16_t retro_input_state_cb(unsigned port, unsigned device, unsigned index, uns
         return g_input_state[id] ? 1 : 0;
     }
     if (device == RETRO_DEVICE_ANALOG) {
+        if (index == 0) {
+            if (id == 0) {
+                if (g_analog_state[0][0] != 0) return g_analog_state[0][0];
+                if (g_input_state[6]) return -32767; // D-Pad Left
+                if (g_input_state[7]) return 32767;  // D-Pad Right
+            } else if (id == 1) {
+                if (g_analog_state[0][1] != 0) return g_analog_state[0][1];
+                if (g_input_state[4]) return -32767; // D-Pad Up
+                if (g_input_state[5]) return 32767;  // D-Pad Down
+            }
+        }
         if (index < 2 && id < 2) {
             return g_analog_state[index][id];
         }

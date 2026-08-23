@@ -101,7 +101,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
     return () => window.removeEventListener('autofire_config_updated', handleAutofireUpdate);
   }, [tenant.id]);
 
-  const is3dConsole = ['PS1_PCSX', 'PS2_NETHERSX2', 'N64_MUPEN64PLUS'].includes(tenant.id);
+  const is3dConsole = ['PS1_PCSX', 'PS2_NETHERSX2', 'PS2_PLAY', 'N64_MUPEN64PLUS', 'DREAMCAST_FLYCAST', 'PSP_PPSSPP'].includes(tenant.id);
 
   const emitNativeButton = async (port: number, buttonId: number, isPressed: boolean) => {
     // R2 (13) Fast Forward on 2D Consoles
