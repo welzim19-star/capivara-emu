@@ -228,10 +228,13 @@ void destroyEGL() {
 
 // ── Libretro Video Callback — Pixel Format Conversion ────────────────────────
 void retro_video_cb(const void* data, unsigned width, unsigned height, size_t pitch) {
-    if (data == RETRO_HW_FRAME_BUFFER_VALID) {
+    if (g_hw_render_active || data == RETRO_HW_FRAME_BUFFER_VALID) {
         // HW Render: frame is already in the OpenGL FBO, just update dimensions.
-        g_video_width  = width;
-        g_video_height = height;
+        if (width > 0 && height > 0) {
+            g_video_width  = width;
+            g_video_height = height;
+        }
+        g_videoFrameReady = true;
         return;
     }
     if (!data) return;
@@ -308,6 +311,16 @@ void renderFrame(bool skipEglSwap) {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, ANativeWindow_getWidth(g_window), ANativeWindow_getHeight(g_window));
+
+    // Reset standard 2D quad pipeline state that may have been altered by 3D core
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_BLEND);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_FALSE);
+
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
     
@@ -319,6 +332,7 @@ void renderFrame(bool skipEglSwap) {
     bool hasContent = false;
     {
         std::lock_guard<std::mutex> lock(g_videoMutex);
+        glActiveTexture(GL_TEXTURE0);
         if (!g_videoBuffer.empty() && !g_hw_render_active) {
             glBindTexture(GL_TEXTURE_2D, g_textureId);
             if (g_pixel_format == RETRO_PIXEL_FORMAT_RGB565) {
@@ -329,13 +343,16 @@ void renderFrame(bool skipEglSwap) {
                              0, GL_RGBA, GL_UNSIGNED_BYTE, g_videoBuffer.data());
             }
             hasContent = true;
-        } else if (g_hw_render_active) {
+        } else if (g_hw_render_active && g_hw_fbo_tex != 0) {
             glBindTexture(GL_TEXTURE_2D, g_hw_fbo_tex);
             hasContent = true;
         }
     }
 
     if (hasContent && g_video_width > 0 && g_video_height > 0) {
+        GLint uTexLoc = glGetUniformLocation(currentProgram, "uTexture");
+        if (uTexLoc >= 0) glUniform1i(uTexLoc, 0);
+
         glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
         GLint posLoc = glGetAttribLocation(currentProgram, "aPosition");
         GLint texLoc = glGetAttribLocation(currentProgram, "aTexCoord");
@@ -364,8 +381,8 @@ void renderFrame(bool skipEglSwap) {
         GLushort indices[] = {0, 1, 2, 0, 2, 3};
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
 
-        glDisableVertexAttribArray(posLoc);
-        glDisableVertexAttribArray(texLoc);
+        if (posLoc >= 0) glDisableVertexAttribArray(posLoc);
+        if (texLoc >= 0) glDisableVertexAttribArray(texLoc);
     }
 
     if (g_screenshotRequest.load()) {

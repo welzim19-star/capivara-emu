@@ -3,6 +3,7 @@
 // This is the "contract layer" between Capivara Engine and any libretro core.
 
 #include "engine_globals.h"
+#include "adapters/ICoreAdapter.h"
 
 // ── Core Log Callback ─────────────────────────────────────────────────────────
 static void retro_log_cb(enum retro_log_level level, const char* fmt, ...) {
@@ -34,6 +35,10 @@ static retro_proc_address_t retro_hw_get_proc_address(const char* sym) {
 // ── Environment Callback ──────────────────────────────────────────────────────
 // Critical: this is called by the core to negotiate capabilities with us.
 bool retro_env_callback(unsigned cmd, void* data) {
+    if (g_coreAdapter && g_coreAdapter->applyEnvironmentHacks(cmd, data, retro_env_callback)) {
+        return true;
+    }
+
     switch (cmd) {
 
     case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {

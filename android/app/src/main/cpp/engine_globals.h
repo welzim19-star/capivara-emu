@@ -24,9 +24,12 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <signal.h>
-#include <ucontext.h>
 #include <cstring>
+#include <memory>
 #include "libretro.h"
+
+class ICoreAdapter;
+extern std::unique_ptr<ICoreAdapter> g_coreAdapter;
 
 // ── Logging Macros ─────────────────────────────────────────────────────────────
 #define LOG_TAG "CapivaraEngineNative"
