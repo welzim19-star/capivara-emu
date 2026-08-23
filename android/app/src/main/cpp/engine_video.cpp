@@ -309,14 +309,42 @@ void retro_video_cb(const void* data, unsigned width, unsigned height, size_t pi
 }
 
 // ── Frame Renderer ────────────────────────────────────────────────────────────
-// Uploads the video buffer as a GL texture and draws a full-screen quad.
+// Presents the rendered frame to the Android Native Window display.
 void renderFrame(bool skipEglSwap) {
     if (g_eglDisplay == EGL_NO_DISPLAY || g_eglSurface == EGL_NO_SURFACE || !g_engineRunning) return;
 
+    if (g_hw_render_active) {
+        // HW Render (Direct EGL Framebuffer 0): the core's GPU renderer drew directly into Framebuffer 0.
+        // We do NOT clear the screen or draw a quad over it. We simply swap the buffers!
+        if (g_screenshotRequest.load()) {
+            std::lock_guard<std::mutex> lock(g_screenshotMutex);
+            int winW = ANativeWindow_getWidth(g_window);
+            int winH = ANativeWindow_getHeight(g_window);
+            if (winW > 0 && winH > 0) {
+                g_screenshotBuffer.resize(winW * winH * 4);
+                glReadPixels(0, 0, winW, winH, GL_RGBA, GL_UNSIGNED_BYTE, g_screenshotBuffer.data());
+            }
+            g_screenshotRequest.store(false);
+            g_screenshotCv.notify_one();
+        }
+
+        if (!skipEglSwap) {
+            EGLBoolean swapOk = eglSwapBuffers(g_eglDisplay, g_eglSurface);
+            if (!swapOk) {
+                EGLint err = eglGetError();
+                if (err == EGL_BAD_SURFACE || err == EGL_BAD_NATIVE_WINDOW) {
+                    LOGE("renderFrame: EGL surface lost (err=0x%x). Suspending rendering.", err);
+                    g_eglSurface = EGL_NO_SURFACE;
+                }
+            }
+        }
+        return;
+    }
+
+    // 2D Software cores (SNES, NES, GBA, Genesis, Arcade): upload pixel buffer and draw textured quad
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, ANativeWindow_getWidth(g_window), ANativeWindow_getHeight(g_window));
 
-    // Reset standard 2D quad pipeline state that may have been altered by 3D core
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_SCISSOR_TEST);
@@ -337,7 +365,7 @@ void renderFrame(bool skipEglSwap) {
     {
         std::lock_guard<std::mutex> lock(g_videoMutex);
         glActiveTexture(GL_TEXTURE0);
-        if (!g_videoBuffer.empty() && !g_hw_render_active) {
+        if (!g_videoBuffer.empty()) {
             glBindTexture(GL_TEXTURE_2D, g_textureId);
             if (g_pixel_format == RETRO_PIXEL_FORMAT_RGB565) {
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, g_video_width, g_video_height,
@@ -347,36 +375,21 @@ void renderFrame(bool skipEglSwap) {
                              0, GL_RGBA, GL_UNSIGNED_BYTE, g_videoBuffer.data());
             }
             hasContent = true;
-        } else if (g_hw_render_active && g_hw_fbo_tex != 0) {
-            glBindTexture(GL_TEXTURE_2D, g_hw_fbo_tex);
-            hasContent = true;
         }
     }
 
-    if (g_video_width == 0)  g_video_width = 640;
-    if (g_video_height == 0) g_video_height = 480;
+    if (g_video_width == 0)  g_video_width = 320;
+    if (g_video_height == 0) g_video_height = 240;
 
     if (hasContent) {
         GLint uTexLoc = glGetUniformLocation(currentProgram, "uTexture");
         if (uTexLoc >= 0) glUniform1i(uTexLoc, 0);
 
-        float uMax = 1.0f, vMax = 1.0f;
-        if (g_hw_render_active) {
-            uMax = (float)g_video_width  / 2048.0f;
-            vMax = (float)g_video_height / 2048.0f;
-        }
-        float topV = 0.0f, bottomV = vMax;
-        if (g_hw_render_active && g_hw_render_cb.bottom_left_origin) {
-            topV = vMax;
-            bottomV = 0.0f;
-        }
-
-        // Standard interleaved quad VBO (x, y, u, v) — 100% GLES3 Core compliant on Adreno
         float quadVertices[16] = {
-            -1.0f,  1.0f, 0.0f, topV,     // Top-Left
-            -1.0f, -1.0f, 0.0f, bottomV,  // Bottom-Left
-             1.0f, -1.0f, uMax, bottomV,  // Bottom-Right
-             1.0f,  1.0f, uMax, topV      // Top-Right
+            -1.0f,  1.0f, 0.0f, 0.0f,  // Top-Left
+            -1.0f, -1.0f, 0.0f, 1.0f,  // Bottom-Left
+             1.0f, -1.0f, 1.0f, 1.0f,  // Bottom-Right
+             1.0f,  1.0f, 1.0f, 0.0f   // Top-Right
         };
 
         glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
@@ -406,9 +419,6 @@ void renderFrame(bool skipEglSwap) {
         size_t bufferSize = g_video_width * g_video_height * 4;
         g_screenshotBuffer.resize(bufferSize);
         glReadPixels(0, 0, g_video_width, g_video_height, GL_RGBA, GL_UNSIGNED_BYTE, g_screenshotBuffer.data());
-        
-        // Android Bitmap expects vertically flipped pixels from OpenGL, but the Java code handles flipping or we can leave it.
-        // Let's just pass raw RGBA and Java will convert to Bitmap.
         g_screenshotRequest.store(false);
         g_screenshotCv.notify_one();
     }

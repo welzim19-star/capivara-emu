@@ -248,9 +248,9 @@ void GameLoop() {
                 rewindIndex = (rewindIndex - 1 + REWIND_MAX_STATES) % REWIND_MAX_STATES;
                 core.unserialize(rewindBuffer[rewindIndex].data(), serializeSize);
             } else {
-                // For HW-rendered cores, bind the target FBO before executing the frame
-                if (g_hw_render_active && g_hw_fbo != 0) {
-                    glBindFramebuffer(GL_FRAMEBUFFER, g_hw_fbo);
+                // For HW-rendered cores (Direct EGL Target), ensure Framebuffer 0 is active
+                if (g_hw_render_active) {
+                    glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 }
 
                 // Normal execution
