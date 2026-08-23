@@ -135,7 +135,13 @@ Java_com_capivaraemu_studio_CapivaraEngine_setSystemDirectory(JNIEnv* env, jobje
     const char* sd = env->GetStringUTFChars(sysDir,  nullptr);
     const char* sv = env->GetStringUTFChars(saveDir, nullptr);
     if (sd) { g_systemDir = sd; LOGI("System directory set to: %s", sd); }
-    if (sv) { g_saveDir   = sv; LOGI("Save directory set to: %s",   sv); }
+    if (sv) { 
+        g_saveDir = sv; 
+        LOGI("Save directory set to: %s", sv); 
+        // Set POSIX environment variables for Libretro cores (Fixes Flycast VMEM mmap errno 13)
+        setenv("TMPDIR", sv, 1);
+        setenv("HOME", sv, 1);
+    }
     env->ReleaseStringUTFChars(sysDir,  sd);
     env->ReleaseStringUTFChars(saveDir, sv);
 }
@@ -188,46 +194,86 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_saveState(JNIEnv* env, jobject, jstring path) {
     if (!core.serialize_size || !core.serialize) return JNI_FALSE;
     const char* filepath = env->GetStringUTFChars(path, nullptr);
+    std::string sPath = filepath ? filepath : "";
+    env->ReleaseStringUTFChars(path, filepath);
+    if (sPath.empty()) return JNI_FALSE;
 
-    std::lock_guard<std::mutex> lock(g_coreMutex);
-    size_t size = core.serialize_size();
-    bool ok = false;
-    if (size > 0) {
-        void* data = malloc(size);
-        ok = core.serialize(data, size);
-        if (ok) {
-            FILE* f = fopen(filepath, "wb");
-            if (f) { fwrite(data, 1, size, f); fclose(f); }
-            else   { ok = false; }
+    if (!g_engineRunning) {
+        // Direct fallback if engine is stopped
+        std::lock_guard<std::mutex> lock(g_coreMutex);
+        size_t size = core.serialize_size();
+        bool ok = false;
+        if (size > 0) {
+            void* data = malloc(size);
+            ok = core.serialize(data, size);
+            if (ok) {
+                FILE* f = fopen(sPath.c_str(), "wb");
+                if (f) { fwrite(data, 1, size, f); fclose(f); }
+                else   { ok = false; }
+            }
+            free(data);
         }
-        free(data);
+        return ok ? JNI_TRUE : JNI_FALSE;
     }
 
-    env->ReleaseStringUTFChars(path, filepath);
-    return ok ? JNI_TRUE : JNI_FALSE;
+    // Thread-safe dispatch to GameLoop thread (where EGL Context is current)
+    std::unique_lock<std::mutex> lock(g_stateOpMutex);
+    g_pendingSavePath = sPath;
+    g_pendingLoadPath = "";
+    g_stateOpPending  = true;
+    g_stateOpResult   = false;
+
+    // Wait up to 3 seconds for GameLoop to serialize on the EGL thread
+    bool signaled = g_stateOpCv.wait_for(lock, std::chrono::seconds(3), [] {
+        return !g_stateOpPending;
+    });
+
+    return (signaled && g_stateOpResult) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_loadState(JNIEnv* env, jobject, jstring path) {
     if (!core.unserialize) return JNI_FALSE;
     const char* filepath = env->GetStringUTFChars(path, nullptr);
+    std::string sPath = filepath ? filepath : "";
+    env->ReleaseStringUTFChars(path, filepath);
+    if (sPath.empty()) return JNI_FALSE;
 
-    std::lock_guard<std::mutex> lock(g_coreMutex);
-    FILE* f = fopen(filepath, "rb");
-    bool ok = false;
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        size_t size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        void* data = malloc(size);
-        fread(data, 1, size, f);
-        fclose(f);
-        ok = core.unserialize(data, size);
-        free(data);
+    if (!g_engineRunning) {
+        // Direct fallback if engine is stopped
+        std::lock_guard<std::mutex> lock(g_coreMutex);
+        FILE* f = fopen(sPath.c_str(), "rb");
+        bool ok = false;
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            size_t size = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            if (size > 0) {
+                void* data = malloc(size);
+                fread(data, 1, size, f);
+                fclose(f);
+                ok = core.unserialize(data, size);
+                free(data);
+            } else {
+                fclose(f);
+            }
+        }
+        return ok ? JNI_TRUE : JNI_FALSE;
     }
 
-    env->ReleaseStringUTFChars(path, filepath);
-    return ok ? JNI_TRUE : JNI_FALSE;
+    // Thread-safe dispatch to GameLoop thread (where EGL Context is current)
+    std::unique_lock<std::mutex> lock(g_stateOpMutex);
+    g_pendingLoadPath = sPath;
+    g_pendingSavePath = "";
+    g_stateOpPending  = true;
+    g_stateOpResult   = false;
+
+    // Wait up to 3 seconds for GameLoop to unserialize on the EGL thread
+    bool signaled = g_stateOpCv.wait_for(lock, std::chrono::seconds(3), [] {
+        return !g_stateOpPending;
+    });
+
+    return (signaled && g_stateOpResult) ? JNI_TRUE : JNI_FALSE;
 }
 
 // ── JNI: Framebuffer access ───────────────────────────────────────────────────

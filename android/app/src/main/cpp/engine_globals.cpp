@@ -67,6 +67,14 @@ std::vector<uint8_t>         g_screenshotBuffer;
 std::mutex                   g_screenshotMutex;
 std::condition_variable      g_screenshotCv;
 
+// Save/Load State Sync across EGL Thread
+std::string                  g_pendingSavePath       = "";
+std::string                  g_pendingLoadPath       = "";
+bool                         g_stateOpResult         = false;
+bool                         g_stateOpPending        = false;
+std::mutex                   g_stateOpMutex;
+std::condition_variable      g_stateOpCv;
+
 // ── GameLoop State ──────────────────────────────────────────────────────────────
 std::string                  g_romPath;
 std::string                  g_sramPath;

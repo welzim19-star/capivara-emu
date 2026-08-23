@@ -174,7 +174,7 @@ void GameLoop() {
     std::vector<std::vector<uint8_t>> rewindBuffer;
     int rewindIndex = 0;
     size_t serializeSize = core.serialize_size ? core.serialize_size() : 0;
-    bool canRewind = (core.serialize && core.unserialize && serializeSize > 0 && serializeSize < 2 * 1024 * 1024);
+    bool canRewind = (!g_hw_render_active && core.serialize && core.unserialize && serializeSize > 0 && serializeSize < 2 * 1024 * 1024);
     if (canRewind) {
         rewindBuffer.resize(REWIND_MAX_STATES, std::vector<uint8_t>(serializeSize));
     }
@@ -182,6 +182,55 @@ void GameLoop() {
     while (g_engineRunning) {
         if (g_surfaceChanged.exchange(false)) {
             recreateEGLSurface();
+        }
+
+        // Process pending Save / Load State on the EGL thread (with active OpenGL context!)
+        if (g_stateOpPending) {
+            std::lock_guard<std::mutex> opLock(g_stateOpMutex);
+            std::lock_guard<std::mutex> coreLock(g_coreMutex);
+            if (!g_pendingSavePath.empty()) {
+                size_t size = core.serialize_size ? core.serialize_size() : 0;
+                bool ok = false;
+                if (size > 0 && core.serialize) {
+                    void* data = malloc(size);
+                    ok = core.serialize(data, size);
+                    if (ok) {
+                        FILE* f = fopen(g_pendingSavePath.c_str(), "wb");
+                        if (f) { fwrite(data, 1, size, f); fclose(f); }
+                        else   { ok = false; }
+                    }
+                    free(data);
+                }
+                g_stateOpResult   = ok;
+                g_pendingSavePath = "";
+                g_stateOpPending  = false;
+                g_stateOpCv.notify_all();
+                LOGI("SaveState executed on GL thread: result=%d", ok);
+            } else if (!g_pendingLoadPath.empty()) {
+                bool ok = false;
+                if (core.unserialize) {
+                    FILE* f = fopen(g_pendingLoadPath.c_str(), "rb");
+                    if (f) {
+                        fseek(f, 0, SEEK_END);
+                        size_t size = ftell(f);
+                        fseek(f, 0, SEEK_SET);
+                        if (size > 0) {
+                            void* data = malloc(size);
+                            fread(data, 1, size, f);
+                            fclose(f);
+                            ok = core.unserialize(data, size);
+                            free(data);
+                        } else {
+                            fclose(f);
+                        }
+                    }
+                }
+                g_stateOpResult   = ok;
+                g_pendingLoadPath = "";
+                g_stateOpPending  = false;
+                g_stateOpCv.notify_all();
+                LOGI("LoadState executed on GL thread: result=%d", ok);
+            }
         }
 
         if (g_enginePaused) {

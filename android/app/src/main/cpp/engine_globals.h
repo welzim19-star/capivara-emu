@@ -120,6 +120,14 @@ extern std::vector<uint8_t>         g_screenshotBuffer;
 extern std::mutex                   g_screenshotMutex;
 extern std::condition_variable      g_screenshotCv;
 
+// Save/Load State Sync across EGL Thread
+extern std::string                  g_pendingSavePath;
+extern std::string                  g_pendingLoadPath;
+extern bool                         g_stateOpResult;
+extern bool                         g_stateOpPending;
+extern std::mutex                   g_stateOpMutex;
+extern std::condition_variable      g_stateOpCv;
+
 extern std::string                  g_romPath;
 extern std::string                  g_sramPath;
 extern std::string                  g_corePath;
