@@ -110,10 +110,22 @@ public:
                     LOGI_FLYCAST("[FLASH] Generated European PAL dc_flash.bin at %s", flashPath.c_str());
                 }
             }
+
+            std::string vmuPath = dir + "/vmu_save_A1.bin";
+            struct stat stVmu{};
+            if (stat(vmuPath.c_str(), &stVmu) != 0 || stVmu.st_size < 131072) {
+                std::vector<uint8_t> vmu(131072, 0x00);
+                FILE* f = fopen(vmuPath.c_str(), "wb");
+                if (f) {
+                    fwrite(vmu.data(), 1, vmu.size(), f);
+                    fclose(f);
+                    LOGI_FLYCAST("[VMU] Initialized Virtual Memory Unit at %s", vmuPath.c_str());
+                }
+            }
         }
 
         g_core_options["reicast_hle_bios"] = hasBootBin ? "disabled" : "enabled";
-        LOGI_FLYCAST("Flycast config complete. Mode=%s | European Flash = ACTIVE", hasBootBin ? "REAL_BIOS" : "HLE_REIOS");
+        LOGI_FLYCAST("Flycast config complete. Mode=%s | European Flash + VMU = ACTIVE", hasBootBin ? "REAL_BIOS" : "HLE_REIOS");
     }
 };
 

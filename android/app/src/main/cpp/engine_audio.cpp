@@ -67,8 +67,45 @@ void retro_audio_cb(int16_t left, int16_t right) {
 }
 
 size_t retro_audio_batch_cb(const int16_t* data, size_t frames) {
-    for (size_t i = 0; i < frames; i++)
-        enqueueAudioSample(data[i * 2], data[i * 2 + 1]);
+    if (!g_audioInitialized || !g_engineRunning || !data || frames == 0) return frames;
+
+    std::unique_lock<std::mutex> lock(g_audioMutex);
+    auto writeOneBatch = [&](int16_t l, int16_t r) {
+        int nextWriteIdx = (g_audioWriteIdx + 1) % AUDIO_BUFFER_COUNT;
+        while (nextWriteIdx == g_audioReadIdx && g_engineRunning) {
+            if (g_fastForward.load()) return;
+            g_audioCv.wait(lock);
+        }
+        if (!g_engineRunning) return;
+
+        g_audioBuffer[g_audioWriteIdx][g_audioWriteOffset++] = l;
+        g_audioBuffer[g_audioWriteIdx][g_audioWriteOffset++] = r;
+        if (g_audioWriteOffset >= AUDIO_FRAMES * AUDIO_CHANNELS) {
+            g_audioWriteOffset = 0;
+            g_audioWriteIdx    = nextWriteIdx;
+        }
+    };
+
+    if (g_resampleRatio == 1.0) {
+        for (size_t i = 0; i < frames; i++) {
+            writeOneBatch(data[i * 2], data[i * 2 + 1]);
+        }
+    } else {
+        for (size_t i = 0; i < frames; i++) {
+            int16_t left  = data[i * 2];
+            int16_t right = data[i * 2 + 1];
+            while (g_fraction < 1.0) {
+                double a     = g_fraction;
+                int16_t outL = (int16_t)(g_lastLeft  + a * (left  - g_lastLeft));
+                int16_t outR = (int16_t)(g_lastRight + a * (right - g_lastRight));
+                writeOneBatch(outL, outR);
+                g_fraction += g_resampleRatio;
+            }
+            g_fraction -= 1.0;
+            g_lastLeft  = left;
+            g_lastRight = right;
+        }
+    }
     return frames;
 }
 

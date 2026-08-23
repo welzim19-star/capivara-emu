@@ -353,33 +353,44 @@ void renderFrame(bool skipEglSwap) {
         }
     }
 
-    if (hasContent && g_video_width > 0 && g_video_height > 0) {
+    if (g_video_width == 0)  g_video_width = 640;
+    if (g_video_height == 0) g_video_height = 480;
+
+    if (hasContent) {
         GLint uTexLoc = glGetUniformLocation(currentProgram, "uTexture");
         if (uTexLoc >= 0) glUniform1i(uTexLoc, 0);
-
-        glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
-        GLint posLoc = glGetAttribLocation(currentProgram, "aPosition");
-        GLint texLoc = glGetAttribLocation(currentProgram, "aTexCoord");
-        if (posLoc >= 0) {
-            glEnableVertexAttribArray(posLoc);
-            glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-        }
 
         float uMax = 1.0f, vMax = 1.0f;
         if (g_hw_render_active) {
             uMax = (float)g_video_width  / 2048.0f;
             vMax = (float)g_video_height / 2048.0f;
         }
-        float texCoords[] = { 0.0f, 0.0f, 0.0f, vMax, uMax, vMax, uMax, 0.0f };
+        float topV = 0.0f, bottomV = vMax;
         if (g_hw_render_active && g_hw_render_cb.bottom_left_origin) {
-            texCoords[1] = vMax; texCoords[3] = 0.0f;
-            texCoords[5] = 0.0f; texCoords[7] = vMax;
+            topV = vMax;
+            bottomV = 0.0f;
         }
 
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // Standard interleaved quad VBO (x, y, u, v) — 100% GLES3 Core compliant on Adreno
+        float quadVertices[16] = {
+            -1.0f,  1.0f, 0.0f, topV,     // Top-Left
+            -1.0f, -1.0f, 0.0f, bottomV,  // Bottom-Left
+             1.0f, -1.0f, uMax, bottomV,  // Bottom-Right
+             1.0f,  1.0f, uMax, topV      // Top-Right
+        };
+
+        glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_DYNAMIC_DRAW);
+
+        GLint posLoc = glGetAttribLocation(currentProgram, "aPosition");
+        GLint texLoc = glGetAttribLocation(currentProgram, "aTexCoord");
+        if (posLoc >= 0) {
+            glEnableVertexAttribArray(posLoc);
+            glVertexAttribPointer(posLoc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+        }
         if (texLoc >= 0) {
             glEnableVertexAttribArray(texLoc);
-            glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), texCoords);
+            glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
         }
 
         GLushort indices[] = {0, 1, 2, 0, 2, 3};
@@ -387,6 +398,7 @@ void renderFrame(bool skipEglSwap) {
 
         if (posLoc >= 0) glDisableVertexAttribArray(posLoc);
         if (texLoc >= 0) glDisableVertexAttribArray(texLoc);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 
     if (g_screenshotRequest.load()) {
