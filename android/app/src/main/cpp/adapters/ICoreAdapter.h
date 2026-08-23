@@ -20,6 +20,11 @@ public:
 
     // Configura as opções do núcleo
     virtual void injectVariables() = 0;
+
+    // Modo de apresentação de vídeo:
+    // true = Blit direto FBO->0 (Ideal para Dreamcast / Flycast)
+    // false = Textured Quad Shader (Ideal para N64 / Mupen64plus GLideN64 e cores 2D)
+    virtual bool useDirectFboBlit() const { return false; }
 };
 
 #endif // ICORE_ADAPTER_H

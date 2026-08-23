@@ -14,6 +14,10 @@ public:
         return false;
     }
 
+    bool useDirectFboBlit() const override {
+        return true;
+    }
+
     bool applyEnvironmentHacks(unsigned cmd, void* data, retro_environment_t original_cb) override {
         if (cmd == RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER) {
             unsigned* p = (unsigned*)data;
