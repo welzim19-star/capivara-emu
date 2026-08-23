@@ -313,8 +313,20 @@ void renderFrame(bool skipEglSwap) {
         int winW = ANativeWindow_getWidth(g_window);
         int winH = ANativeWindow_getHeight(g_window);
 
+        // Sanitize OpenGL pipeline state altered by 3D core
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_BLEND);
+        glDisable(GL_CULL_FACE);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_FALSE);
+
         // Scale and center the 3D rendered frame from g_hw_fbo to the full Android display (4:3 aspect)
-        if (winW > 0 && winH > 0 && g_video_width > 0 && g_video_height > 0) {
+        if (winW > 0 && winH > 0) {
+            int srcW = (g_video_width > 0) ? (int)g_video_width : 640;
+            int srcH = (g_video_height > 0) ? (int)g_video_height : 480;
+
             float targetAspect = 4.0f / 3.0f;
             float windowAspect = (float)winW / (float)winH;
             int dstW, dstH, dstX, dstY;
@@ -333,13 +345,14 @@ void renderFrame(bool skipEglSwap) {
 
             // Clear black letterbox bars on the display
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, winW, winH);
             glClearColor(0, 0, 0, 1);
             glClear(GL_COLOR_BUFFER_BIT);
 
             // Blit from HW FBO to Window Framebuffer 0
             glBindFramebuffer(GL_READ_FRAMEBUFFER, g_hw_fbo);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-            glBlitFramebuffer(0, 0, (int)g_video_width, (int)g_video_height,
+            glBlitFramebuffer(0, 0, srcW, srcH,
                               dstX, dstY, dstX + dstW, dstY + dstH,
                               GL_COLOR_BUFFER_BIT, GL_LINEAR);
         }
