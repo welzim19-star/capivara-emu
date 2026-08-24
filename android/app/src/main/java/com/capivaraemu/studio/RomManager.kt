@@ -132,12 +132,14 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
                     val fd = activeRomFd!!.fd
                     val fdPath = "/proc/self/fd/$fd"
                     try {
+                        if (cacheFile.exists()) {
+                            cacheFile.delete()
+                        }
                         android.system.Os.symlink(fdPath, cacheFile.absolutePath)
                         udpLogger("Using Zero-Copy symlink for large ROM: ${cacheFile.absolutePath} -> $fdPath")
                         return cacheFile.absolutePath
                     } catch (e: Exception) {
-                        udpLogger("Symlink failed (${e.message}), falling back to FD path: $fdPath")
-                        return fdPath
+                        udpLogger("Symlink failed (${e.message}), trying copy fallback to cache file...")
                     }
                 }
             }

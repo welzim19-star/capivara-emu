@@ -48,10 +48,11 @@ public:
         g_core_options["reicast_internal_resolution"]   = "640x480";
         g_core_options["reicast_gdrom_fast_loading"]    = "enabled";            // Fast track seek on CHD/GDI
         g_core_options["reicast_digital_triggers"]      = "enabled";            // Allow digital L/R on touchpads
-        g_core_options["reicast_widescreen_hack"]       = "enabled";            // True 16:9 3D Widescreen geometry (fills modern phone displays)
+        g_core_options["reicast_widescreen_hack"]       = "disabled";           // Keep stable 3D viewport (avoids geometry freeze on Sonic)
         g_core_options["reicast_device_port1_slot1"]    = "VMU";
-        g_core_options["reicast_device_port1_slot2"]    = "Vibration Pack";
+        g_core_options["reicast_device_port1_slot2"]    = "VMU";
         g_core_options["reicast_device_port2_slot1"]    = "VMU";
+        g_core_options["reicast_device_port2_slot2"]    = "VMU";
         g_core_options["reicast_per_content_vmus"]      = "disabled";
 
         // ── Direct Game Boot with European NVRAM Flash ───────────────────────

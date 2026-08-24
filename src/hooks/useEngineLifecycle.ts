@@ -88,20 +88,6 @@ export function useEngineLifecycle({
 
         await CapivaraEngine.resume();
         onShowToast("Jogo Iniciado no Modo Nativo!");
-        
-        const storageKey = `saves_${tenant.id}_${currentGame.id}`;
-        const savedData = localStorage.getItem(storageKey);
-        const saves = savedData ? JSON.parse(savedData) : {};
-        if (saves[0]) {
-          setTimeout(async () => {
-            try {
-              await CapivaraEngine.loadState({ slot: 0, hash: currentGame.id });
-              onShowToast("Auto-Load: Progresso Restaurado!");
-            } catch (e) {
-              console.warn("Auto-load failed", e);
-            }
-          }, 1000); 
-        }
 
       } catch (err: any) {
         const msg = err?.message ?? String(err);
@@ -126,22 +112,6 @@ export function useEngineLifecycle({
         CapivaraEngine.resume();
       } else {
         CapivaraEngine.pause();
-        CapivaraEngine.saveState({ slot: 0, hash: currentGame.id }).then((result: any) => {
-          const storageKey = `saves_${tenant.id}_${currentGame.id}`;
-          const savedData = localStorage.getItem(storageKey);
-          const saves = savedData ? JSON.parse(savedData) : {};
-          saves[0] = {
-            id: `${currentGame.id}_0`,
-            gameId: currentGame.id,
-            tenantId: tenant.id,
-            slot: 0,
-            timestamp: new Date().toLocaleString(),
-            thumbnailBase64: result?.thumbnailBase64,
-            dataSizeKb: result?.dataSizeKb || 4096,
-            hash: currentGame.id
-          };
-          localStorage.setItem(storageKey, JSON.stringify(saves));
-        }).catch(() => console.warn("Auto-save failed"));
       }
     });
 
