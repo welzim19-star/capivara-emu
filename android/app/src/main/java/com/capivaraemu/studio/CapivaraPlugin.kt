@@ -406,7 +406,9 @@ class CapivaraPlugin : Plugin() {
     @PluginMethod
     fun saveState(call: PluginCall) {
         val slot = call.getInt("slot", 0) ?: 0
-        val path = File(context.cacheDir, "save_${slot}.state").absolutePath
+        val hash = call.getString("hash", "default") ?: "default"
+        val safeHash = hash.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        val path = File(context.cacheDir, "save_${safeHash}_${slot}.state").absolutePath
         val success = CapivaraEngine.saveState(path)
         
         if (!success) {
@@ -543,8 +545,16 @@ class CapivaraPlugin : Plugin() {
     @PluginMethod
     fun loadState(call: PluginCall) {
         val slot = call.getInt("slot", 0) ?: 0
-        val path = File(context.cacheDir, "save_${slot}.state").absolutePath
-        val success = CapivaraEngine.loadState(path)
+        val hash = call.getString("hash", "default") ?: "default"
+        val safeHash = hash.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        
+        var targetFile = File(context.cacheDir, "save_${safeHash}_${slot}.state")
+        if (!targetFile.exists()) {
+            val legacyFile = File(context.cacheDir, "save_${slot}.state")
+            if (legacyFile.exists()) targetFile = legacyFile
+        }
+
+        val success = CapivaraEngine.loadState(targetFile.absolutePath)
         if (success) {
             call.resolve()
         } else {

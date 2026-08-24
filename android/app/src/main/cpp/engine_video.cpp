@@ -330,7 +330,7 @@ void renderFrame(bool skipEglSwap) {
             int srcW = (g_video_width > 0) ? (int)g_video_width : 640;
             int srcH = (g_video_height > 0) ? (int)g_video_height : 480;
 
-            float targetAspect = 4.0f / 3.0f;
+            float targetAspect = 16.0f / 9.0f;
             float windowAspect = (float)winW / (float)winH;
             int dstW, dstH, dstX, dstY;
 

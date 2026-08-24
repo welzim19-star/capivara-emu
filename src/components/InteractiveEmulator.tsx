@@ -238,7 +238,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
       const result = await CapivaraEngine.saveState({ slot, hash });
       
       // Update local storage metadata
-      const storageKey = `saves_${tenant.id}_${currentGame.id}`;
+      const storageKey = `capy_saves_${tenant.id}_${currentGame.id}`;
       const savedData = localStorage.getItem(storageKey);
       const saves = savedData ? JSON.parse(savedData) : {};
       

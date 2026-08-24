@@ -66,14 +66,35 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
             activeRomFd = null
 
             val isMame = coreFileName.contains("mame") || coreFileName.contains("fbneo")
+            val isFbneo = coreFileName.contains("fbneo")
+            val isZip = originalFileName.lowercase().endsWith(".zip")
+            val uri = Uri.parse(uriString)
+
+            // ── 1. Direct Zero-Copy Path (Instant 0.01s boot for CHD, GDI, CDI, ISO, Z64, etc.) ──
+            if (!isZip && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && android.os.Environment.isExternalStorageManager()) {
+                val realPath = getRealPathFromUri(uri)
+                if (realPath != null && File(realPath).exists() && File(realPath).length() > 0) {
+                    udpLogger("Using direct Zero-Copy filesystem path: $realPath (Instant Boot!)")
+                    return realPath
+                }
+            }
+
+            // ── 2. Check if ZIP content is already extracted in cache ──────────
+            if (isZip && !isMame && !isFbneo) {
+                val zipBase = originalFileName.substringBeforeLast(".").replace("[^a-zA-Z0-9.-]".toRegex(), "_")
+                val possibleFiles = context.cacheDir.listFiles { _, name -> name.startsWith(zipBase) && !name.endsWith(".zip") }
+                if (possibleFiles != null && possibleFiles.isNotEmpty() && possibleFiles[0].length() > 0) {
+                    udpLogger("ZIP already extracted in cache: ${possibleFiles[0].name} (Instant Boot!)")
+                    return possibleFiles[0].absolutePath
+                }
+            }
+
             val cacheFileName = if (isMame) originalFileName else originalFileName.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
             val cacheFile = File(context.cacheDir, cacheFileName)
 
             if (cacheFile.exists() && cacheFile.length() > 0) {
-                // Determine file size of the source URI
                 var sourceSize: Long = -1
                 try {
-                    val uri = Uri.parse(uriString)
                     context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                         val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
                         if (cursor.moveToFirst() && sizeIndex != -1) {
@@ -86,11 +107,9 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
                     udpLogger("ROM already fully cached! Skipping copy for instant load.")
                     return cacheFile.absolutePath
                 } else if (sourceSize == -1L && cacheFile.length() > 50000) {
-                    // Fallback for extracted zips where size check is hard, but file is substantial
-                    udpLogger("ROM already substantially cached. Assuming intact and skipping copy.")
+                    udpLogger("ROM already substantially cached. Skipping copy.")
                     return cacheFile.absolutePath
                 } else {
-                    udpLogger("Cache file size mismatch or empty. Deleting and recopying...")
                     cacheFile.delete()
                 }
             }
@@ -104,18 +123,9 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
                 return cacheFile.absolutePath
             }
 
-            val uri = Uri.parse(uriString)
-
-            val isLargeIsoCore = coreFileName.contains("nethersx2") || coreFileName.contains("ppsspp")
-            if (isLargeIsoCore) {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && android.os.Environment.isExternalStorageManager()) {
-                    val realPath = getRealPathFromUri(uri)
-                    if (realPath != null && File(realPath).exists()) {
-                        udpLogger("Using absolute path directly (All Files Access): $realPath")
-                        return realPath
-                    }
-                }
-
+            // Zero-Copy FileDescriptor symlink fallback
+            val isLargeIsoCore = coreFileName.contains("nethersx2") || coreFileName.contains("ppsspp") || coreFileName.contains("flycast") || coreFileName.contains("play")
+            if (isLargeIsoCore && !isZip) {
                 udpLogger("Opening FileDescriptor for Zero-Copy...")
                 activeRomFd = context.contentResolver.openFileDescriptor(uri, "r")
                 if (activeRomFd != null) {
@@ -123,7 +133,7 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
                     val fdPath = "/proc/self/fd/$fd"
                     try {
                         android.system.Os.symlink(fdPath, cacheFile.absolutePath)
-                        udpLogger("Using Zero-Copy symlink for large ISO: ${cacheFile.absolutePath} -> $fdPath")
+                        udpLogger("Using Zero-Copy symlink for large ROM: ${cacheFile.absolutePath} -> $fdPath")
                         return cacheFile.absolutePath
                     } catch (e: Exception) {
                         udpLogger("Symlink failed (${e.message}), falling back to FD path: $fdPath")
@@ -132,8 +142,7 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
                 }
             }
 
-            val isFbneo = coreFileName.contains("fbneo")
-            if (originalFileName.lowercase().endsWith(".zip") && !isMame && !isFbneo) {
+            if (isZip && !isMame && !isFbneo) {
                 udpLogger("ZIP detected for non-MAME core. Extracting first file...")
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     ZipInputStream(input).use { zis ->
