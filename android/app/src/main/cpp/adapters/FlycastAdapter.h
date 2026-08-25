@@ -56,6 +56,12 @@ public:
         g_core_options["reicast_device_port2_slot2"]    = "VMU";
         g_core_options["reicast_per_content_vmus"]      = "disabled";
 
+        g_core_options["flycast_device_port1_slot1"]    = "VMU";
+        g_core_options["flycast_device_port1_slot2"]    = "VMU";
+        g_core_options["flycast_device_port2_slot1"]    = "VMU";
+        g_core_options["flycast_device_port2_slot2"]    = "VMU";
+        g_core_options["flycast_per_content_vmus"]      = "disabled";
+
         // ── Direct Game Boot with NVRAM Flash ─────────────────────────────────
         bool hasBootBin = false;
         std::vector<std::string> searchDirs;
@@ -130,9 +136,16 @@ public:
                     FILE* vf = fopen(vmuPath.c_str(), "rb");
                     if (vf) {
                         uint8_t testByte = 0;
+                        uint8_t dirByte = 0;
+                        uint8_t userBlockByte = 0;
                         fseek(vf, 0x1FE00, SEEK_SET);
-                        if (fread(&testByte, 1, 1, vf) == 1 && testByte != 0x55) {
-                            needsFormat = true;
+                        fread(&testByte, 1, 1, vf);
+                        fseek(vf, 0x1FE42, SEEK_SET);
+                        fread(&dirByte, 1, 1, vf);
+                        fseek(vf, 0x1FE4E, SEEK_SET);
+                        fread(&userBlockByte, 1, 1, vf);
+                        if (testByte != 0x55 || dirByte != 0xFD || userBlockByte != 0xC8) {
+                            needsFormat = true; // Corrupted or misaligned VMU
                         }
                         fclose(vf);
                     }
@@ -141,31 +154,36 @@ public:
                 if (needsFormat) {
                     std::vector<uint8_t> vmu(131072, 0x00);
 
-                    // FAT Block (Block 254 / Offset 0x1FC00)
+                    // ── FAT Block (Block 254 / Offset 0x1FC00) ─────────────────
                     uint16_t* fat = (uint16_t*)(vmu.data() + 0x1FC00);
-                    for (int b = 0; b <= 240; ++b) fat[b] = 0xFFFE;
-                    for (int b = 241; b <= 253; ++b) fat[b] = (b == 241) ? 0xFFFA : (b - 1);
-                    fat[254] = 0xFFFC;
-                    fat[255] = 0xFFFC;
+                    for (int b = 0; b <= 240; ++b) fat[b] = 0xFFFE; // Free User Blocks 0..200
+                    for (int b = 241; b <= 253; ++b) fat[b] = (b == 241) ? 0xFFFA : (b - 1); // Directory chain
+                    fat[254] = 0xFFFC; // FAT system block
+                    fat[255] = 0xFFFC; // Root system block
 
-                    // Root Block (Block 255 / Offset 0x1FE00)
+                    // ── Root Block (Block 255 / Offset 0x1FE00) ────────────────
                     uint8_t* root = vmu.data() + 0x1FE00;
-                    memset(root, 0x55, 16);
+                    memset(root, 0x55, 16); // Magic pattern 0x55
+
+                    // BCD Timestamp: 2026-08-25 12:00:00
                     root[0x30] = 0x20; root[0x31] = 0x26;
-                    root[0x32] = 0x08; root[0x33] = 0x24;
-                    root[0x34] = 0x12; root[0x35] = 0x00; root[0x36] = 0x00;
-                    root[0x40] = 255; root[0x41] = 0;
-                    root[0x44] = 254; root[0x45] = 0;
-                    root[0x46] = 1;   root[0x47] = 0;
-                    root[0x48] = 253; root[0x49] = 0;
-                    root[0x4A] = 13;  root[0x4B] = 0;
-                    root[0x4E] = 200; root[0x4F] = 0;
+                    root[0x32] = 0x08; root[0x33] = 0x25;
+                    root[0x34] = 0x12; root[0x35] = 0x00; root[0x36] = 0x00; root[0x37] = 0x00;
+
+                    root[0x40] = 0xFF; root[0x41] = 0x00; // Total blocks - 1 (255)
+                    root[0x42] = 0xFD; root[0x43] = 0x00; // Dir location (Block 253)
+                    root[0x44] = 0x0D; root[0x45] = 0x00; // Dir size (13 blocks)
+                    root[0x46] = 0xFE; root[0x47] = 0x00; // FAT location (Block 254)
+                    root[0x48] = 0x01; root[0x49] = 0x00; // FAT size (1 block)
+                    root[0x4A] = 0x00; root[0x4B] = 0x00; // Icon shape (0)
+                    root[0x4C] = 0x00; root[0x4D] = 0x00; // Volume shape (0)
+                    root[0x4E] = 0xC8; root[0x4F] = 0x00; // User blocks (200 free blocks)
 
                     FILE* f = fopen(vmuPath.c_str(), "wb");
                     if (f) {
                         fwrite(vmu.data(), 1, vmu.size(), f);
                         fclose(f);
-                        LOGI_FLYCAST("[VMU] Pre-formatted Sega Dreamcast VMU at %s", vmuPath.c_str());
+                        LOGI_FLYCAST("[VMU] Pre-formatted Sega Dreamcast VMU (200 Free Blocks, Directory at 253, FAT at 254) at %s", vmuPath.c_str());
                     }
                 }
             }
