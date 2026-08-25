@@ -172,10 +172,13 @@ class CapivaraPlugin : Plugin() {
 
         val sysDir = File(context.filesDir, "system/bios")
         sysDir.mkdirs()
-        
+        File(sysDir, "dc").mkdirs()
 
         val saveDir = File(context.filesDir, "saves")
         saveDir.mkdirs()
+        File(saveDir, "dc").mkdirs()
+        File(context.filesDir, "system/dc").mkdirs()
+        File(context.filesDir, "dc").mkdirs()
 
         CapivaraEngine.setSystemDirectory(sysDir.absolutePath, saveDir.absolutePath)
 

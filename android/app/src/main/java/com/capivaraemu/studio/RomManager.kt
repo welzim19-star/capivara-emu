@@ -135,8 +135,10 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
                 }
             }
 
-            // Zero-Copy FileDescriptor symlink fallback
-            val isLargeIsoCore = coreFileName.contains("nethersx2") || coreFileName.contains("ppsspp") || coreFileName.contains("flycast") || coreFileName.contains("play")
+            // Zero-Copy FileDescriptor symlink fallback (for all heavy 3D / Disc cores)
+            val isLargeIsoCore = coreFileName.contains("nethersx2") || coreFileName.contains("ppsspp") ||
+                                 coreFileName.contains("flycast") || coreFileName.contains("play") ||
+                                 coreFileName.contains("mupen64plus") || coreFileName.contains("pcsx")
             if (isLargeIsoCore && !isZip) {
                 udpLogger("Opening FileDescriptor for Zero-Copy...")
                 activeRomFd = context.contentResolver.openFileDescriptor(uri, "r")

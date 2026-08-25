@@ -126,8 +126,13 @@ public:
                 }
             }
 
-            // Format all standard VMU slots (A1, A2, B1, B2)
-            const char* vmuNames[] = { "vmu_save_A1.bin", "vmu_save_A2.bin", "vmu_save_B1.bin", "vmu_save_B2.bin" };
+            // Format all 8 standard Sega Dreamcast VMU slots (A1, A2, B1, B2, C1, C2, D1, D2)
+            const char* vmuNames[] = {
+                "vmu_save_A1.bin", "vmu_save_A2.bin",
+                "vmu_save_B1.bin", "vmu_save_B2.bin",
+                "vmu_save_C1.bin", "vmu_save_C2.bin",
+                "vmu_save_D1.bin", "vmu_save_D2.bin"
+            };
             for (const char* vname : vmuNames) {
                 std::string vmuPath = dir + "/" + vname;
                 struct stat stVmu{};

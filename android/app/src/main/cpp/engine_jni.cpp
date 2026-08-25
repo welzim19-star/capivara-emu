@@ -181,7 +181,10 @@ Java_com_capivaraemu_studio_CapivaraEngine_loadGame(JNIEnv* env, jobject, jstrin
     if (g_engineRunning) {
         g_engineRunning = false;
         g_audioCv.notify_all();
+        g_stateOpCv.notify_all();
         if (g_gameThread.joinable()) g_gameThread.join();
+        g_coreAdapter = nullptr;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     g_engineRunning = true;
@@ -399,12 +402,17 @@ Java_com_capivaraemu_studio_CapivaraEngine_destroyEngine(JNIEnv*, jobject) {
     g_enginePaused     = false;
     g_audioInitialized = false;
     g_audioCv.notify_all();
+    g_stateOpCv.notify_all();
 
     if (bqPlayerPlay)
         (*bqPlayerPlay)->SetPlayState(bqPlayerPlay, SL_PLAYSTATE_STOPPED);
 
     if (g_gameThread.joinable())
         g_gameThread.join();
+
+    g_coreAdapter = nullptr;
+    g_core_options.clear();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     LOGI("Engine destroyed");
 }
