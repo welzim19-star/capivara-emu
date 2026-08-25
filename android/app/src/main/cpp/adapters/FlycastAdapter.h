@@ -138,17 +138,21 @@ public:
                         uint8_t testByte = 0;
                         uint8_t dirByte = 0;
                         uint8_t userBlockByte = 0;
-                        uint16_t testFat200 = 0;
+                        uint16_t testFat0 = 0;
+                        uint16_t testFat199 = 0;
                         fseek(vf, 0x1FE00, SEEK_SET);
                         fread(&testByte, 1, 1, vf);
                         fseek(vf, 0x1FE42, SEEK_SET);
                         fread(&dirByte, 1, 1, vf);
                         fseek(vf, 0x1FE4E, SEEK_SET);
                         fread(&userBlockByte, 1, 1, vf);
-                        fseek(vf, 0x1FC00 + 200 * 2, SEEK_SET);
-                        fread(&testFat200, 2, 1, vf);
-                        if (testByte != 0x55 || dirByte != 0xFD || userBlockByte != 0xC8 || testFat200 != 0xFFFC) {
-                            needsFormat = true; // Corrupted or misaligned VMU
+                        fseek(vf, 0x1FC00, SEEK_SET);
+                        fread(&testFat0, 2, 1, vf);
+                        fseek(vf, 0x1FC00 + 199 * 2, SEEK_SET);
+                        fread(&testFat199, 2, 1, vf);
+                        // In Sega Dreamcast VMS FAT: 0xFFFC = UNALLOCATED (FREE BLOCK), 0xFFFA = LAST BLOCK IN CHAIN
+                        if (testByte != 0x55 || dirByte != 0xFD || userBlockByte != 0xC8 || testFat0 != 0xFFFC || testFat199 != 0xFFFC) {
+                            needsFormat = true; // Corrupted, non-standard or misaligned VMU
                         }
                         fclose(vf);
                     }
@@ -158,12 +162,13 @@ public:
                     std::vector<uint8_t> vmu(131072, 0x00);
 
                     // ── FAT Block (Block 254 / Offset 0x1FC00) ─────────────────
+                    // Sega VMS Spec: 0xFFFC = Unallocated (Free), 0xFFFA = EOF / Allocated
                     uint16_t* fat = (uint16_t*)(vmu.data() + 0x1FC00);
-                    for (int b = 0; b < 200; ++b)   fat[b] = 0xFFFE; // 200 Free User Blocks (0..199)
-                    for (int b = 200; b <= 240; ++b) fat[b] = 0xFFFC; // Reserved system blocks (200..240)
+                    for (int b = 0; b < 200; ++b)     fat[b] = 0xFFFC; // 200 Free User Blocks (0..199 = 0xFFFC)
+                    for (int b = 200; b <= 240; ++b) fat[b] = 0xFFFA; // Reserved system blocks (200..240 = 0xFFFA)
                     for (int b = 241; b <= 253; ++b) fat[b] = (b == 241) ? 0xFFFA : (uint16_t)(b - 1); // Directory chain
-                    fat[254] = 0xFFFC; // FAT system block
-                    fat[255] = 0xFFFC; // Root system block
+                    fat[254] = 0xFFFA; // FAT system block
+                    fat[255] = 0xFFFA; // Root system block
 
                     // ── Root Block (Block 255 / Offset 0x1FE00) ────────────────
                     uint8_t* root = vmu.data() + 0x1FE00;
@@ -186,8 +191,10 @@ public:
                     FILE* f = fopen(vmuPath.c_str(), "wb");
                     if (f) {
                         fwrite(vmu.data(), 1, vmu.size(), f);
+                        fflush(f);
+                        fsync(fileno(f));
                         fclose(f);
-                        LOGI_FLYCAST("[VMU] Pre-formatted Sega Dreamcast VMU (200 Free Blocks, Directory at 253, FAT at 254) at %s", vmuPath.c_str());
+                        LOGI_FLYCAST("[VMU] Pre-formatted Sega Dreamcast VMU (200 Free 0xFFFC Blocks, Dir@253, FAT@254) at %s", vmuPath.c_str());
                     }
                 }
             }
