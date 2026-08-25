@@ -304,9 +304,18 @@ extern "C" JNIEXPORT jintArray JNICALL
 Java_com_capivaraemu_studio_CapivaraEngine_getFramebufferResolution(JNIEnv* env, jobject) {
     std::lock_guard<std::mutex> lock(g_videoMutex);
     jintArray result = env->NewIntArray(3);
-    // If HW render is active, pixels are captured as RGBA8888 (pixel_format = 1, assuming RETRO_PIXEL_FORMAT_XRGB8888)
+    jint w = (jint)g_video_width;
+    jint h = (jint)g_video_height;
+    if (g_hw_render_active && g_window) {
+        int winW = ANativeWindow_getWidth(g_window);
+        int winH = ANativeWindow_getHeight(g_window);
+        if (winW > 0 && winH > 0) {
+            w = winW;
+            h = winH;
+        }
+    }
     jint format = g_hw_render_active ? 1 : (jint)g_pixel_format;
-    jint res[3] = { (jint)g_video_width, (jint)g_video_height, format };
+    jint res[3] = { w, h, format };
     env->SetIntArrayRegion(result, 0, 3, res);
     return result;
 }

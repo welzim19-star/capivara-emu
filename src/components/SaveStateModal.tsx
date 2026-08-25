@@ -37,45 +37,10 @@ export const SaveStateModal: React.FC<Props> = ({ tenant, game, mode, onSelectSl
       onSelectSlot(slot, existingSave.hash, existingSave.thumbnailBase64);
       onClose();
     } else {
-      // Save Mode: Generate new save state
+      // Save Mode: Generate new hash and let the native engine capture the real frame
       const newHash = generateHash(slot);
-      
-      // Generate a mock gold canvas thumbnail
-      const canvas = document.createElement('canvas');
-      canvas.width = 160;
-      canvas.height = 90;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(0, 0, 160, 90);
-        ctx.fillStyle = '#f59e0b';
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText(`SLOT ${slot} SNAPSHOT`, 15, 30);
-        ctx.fillText(`${new Date().toLocaleTimeString()}`, 15, 50);
-        ctx.fillStyle = '#38bdf8';
-        ctx.fillRect(15, 60, 130, 15);
-      }
-
-      const thumbBase64 = canvas.toDataURL('image/jpeg', 0.8);
-      const newSaveItem = {
-        id: newHash,
-        gameId: game.id,
-        tenantId: tenant.id,
-        slot,
-        hash: newHash,
-        timestamp: new Date().toLocaleString('pt-BR'),
-        dataSizeKb: Math.floor(Math.random() * 400 + 120),
-        thumbnailBase64: thumbBase64
-      };
-
-      const updatedSaves = { ...saves, [slot]: newSaveItem };
-      setSaves(updatedSaves);
-      localStorage.setItem(`capy_saves_${tenant.id}_${game.id}`, JSON.stringify(updatedSaves));
-
-      setToastMsg(`Estado salvo com sucesso no Slot ${slot}!`);
-      setTimeout(() => setToastMsg(null), 2500);
-
-      onSelectSlot(slot, newHash, thumbBase64);
+      onSelectSlot(slot, newHash);
+      onClose();
     }
   };
 
@@ -89,29 +54,29 @@ export const SaveStateModal: React.FC<Props> = ({ tenant, game, mode, onSelectSl
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/90 z-[120] backdrop-blur-xl flex items-center justify-center p-4 animate-fadeIn">
+    <div className="fixed inset-0 bg-black/90 z-[120] backdrop-blur-xl flex items-center justify-center p-2 sm:p-4 animate-fadeIn">
       <div 
-        className="bg-zinc-950 border-2 border-amber-500/40 p-5 md:p-7 rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[85vh] relative overflow-hidden"
+        className="bg-zinc-950 border-2 border-amber-500/40 p-4 sm:p-6 rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[92vh] relative overflow-hidden"
         style={{ boxShadow: '0 0 30px -5px rgba(245, 158, 11, 0.4)' }}
       >
         
         {/* Top Gold Header */}
-        <div className="flex justify-between items-center mb-5 pb-4 border-b border-amber-500/20 shrink-0">
+        <div className="flex justify-between items-center mb-3 pb-3 border-b border-amber-500/20 shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 flex items-center justify-center text-black font-black text-xl shadow-lg shadow-amber-500/30">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 flex items-center justify-center text-black font-black text-lg sm:text-xl shadow-lg shadow-amber-500/30">
               {mode === 'save' ? '💾' : '📂'}
             </div>
             <div>
-              <h2 className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 font-black text-xl tracking-wider">
-                {mode === 'save' ? 'GOLD SAVE STATE ENGINE' : 'LOAD STATE MANAGER'}
+              <h2 className="text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 font-black text-base sm:text-xl tracking-wider">
+                {mode === 'save' ? 'SALVAR ESTADO (SNAPSHOT)' : 'CARREGAR ESTADO'}
               </h2>
-              <p className="text-amber-400/80 text-xs font-mono uppercase font-bold">{game.title || game.name} • {tenant.name}</p>
+              <p className="text-amber-400/80 text-[10px] sm:text-xs font-mono uppercase font-bold truncate max-w-[200px] sm:max-w-xs">{game.title || game.name} • {tenant.name}</p>
             </div>
           </div>
 
           <button 
             onClick={onClose} 
-            className="w-9 h-9 rounded-xl bg-zinc-900 border border-amber-500/30 hover:border-amber-400 text-amber-400 font-black text-lg transition-all flex items-center justify-center hover:scale-105"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-zinc-900 border border-amber-500/30 hover:border-amber-400 text-amber-400 font-black text-base sm:text-lg transition-all flex items-center justify-center hover:scale-105"
           >
             ✕
           </button>

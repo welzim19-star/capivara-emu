@@ -416,21 +416,18 @@ class CapivaraPlugin : Plugin() {
             return
         }
 
-        // Try to capture a thumbnail for the Save State UI
+        // Try to capture a real thumbnail for the Save State UI
         var thumbBase64: String? = null
         try {
-            val pixels = CapivaraEngine.captureFramePixels()
-            val res = CapivaraEngine.getVideoResolution()
+            val pixels = CapivaraEngine.getFramebufferPixels() ?: CapivaraEngine.captureFramePixels()
+            val res = CapivaraEngine.getFramebufferResolution() ?: CapivaraEngine.getVideoResolution()
             
             if (pixels != null && res != null && res.size >= 2 && res[0] > 0 && res[1] > 0) {
                 val width = res[0]
                 val height = res[1]
                 val argbPixels = IntArray(width * height)
                 
-                // Avoid allocating millions of Integer objects!
-                val expectedBytes = width * height * 4
-                val limit = if (pixels.size < expectedBytes) pixels.size / 4 else width * height
-                
+                val limit = (pixels.size / 4).coerceAtMost(width * height)
                 for (i in 0 until limit) {
                     val r = pixels[i * 4 + 0].toInt() and 0xFF
                     val g = pixels[i * 4 + 1].toInt() and 0xFF
@@ -438,12 +435,19 @@ class CapivaraPlugin : Plugin() {
                     argbPixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
                 }
                 
-                val bmp = android.graphics.Bitmap.createBitmap(argbPixels, width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                var bmp = android.graphics.Bitmap.createBitmap(argbPixels, width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                
+                // Flip vertically if read directly from OpenGL bottom-left framebuffer
+                val matrix = android.graphics.Matrix().apply { preScale(1.0f, -1.0f) }
+                val flipped = android.graphics.Bitmap.createBitmap(bmp, 0, 0, width, height, matrix, false)
+                bmp.recycle()
+                bmp = flipped
+
                 val thumbW = 320
                 val thumbH = (320.0 * height / width).toInt().coerceAtLeast(1)
                 val thumbBmp = android.graphics.Bitmap.createScaledBitmap(bmp, thumbW, thumbH, true)
                 val thumbOut = java.io.ByteArrayOutputStream()
-                thumbBmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, thumbOut)
+                thumbBmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, thumbOut)
                 thumbBase64 = "data:image/jpeg;base64," + android.util.Base64.encodeToString(thumbOut.toByteArray(), android.util.Base64.NO_WRAP)
                 
                 bmp.recycle()
