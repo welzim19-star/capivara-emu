@@ -138,13 +138,16 @@ public:
                         uint8_t testByte = 0;
                         uint8_t dirByte = 0;
                         uint8_t userBlockByte = 0;
+                        uint16_t testFat200 = 0;
                         fseek(vf, 0x1FE00, SEEK_SET);
                         fread(&testByte, 1, 1, vf);
                         fseek(vf, 0x1FE42, SEEK_SET);
                         fread(&dirByte, 1, 1, vf);
                         fseek(vf, 0x1FE4E, SEEK_SET);
                         fread(&userBlockByte, 1, 1, vf);
-                        if (testByte != 0x55 || dirByte != 0xFD || userBlockByte != 0xC8) {
+                        fseek(vf, 0x1FC00 + 200 * 2, SEEK_SET);
+                        fread(&testFat200, 2, 1, vf);
+                        if (testByte != 0x55 || dirByte != 0xFD || userBlockByte != 0xC8 || testFat200 != 0xFFFC) {
                             needsFormat = true; // Corrupted or misaligned VMU
                         }
                         fclose(vf);
@@ -156,8 +159,9 @@ public:
 
                     // ── FAT Block (Block 254 / Offset 0x1FC00) ─────────────────
                     uint16_t* fat = (uint16_t*)(vmu.data() + 0x1FC00);
-                    for (int b = 0; b <= 240; ++b) fat[b] = 0xFFFE; // Free User Blocks 0..200
-                    for (int b = 241; b <= 253; ++b) fat[b] = (b == 241) ? 0xFFFA : (b - 1); // Directory chain
+                    for (int b = 0; b < 200; ++b)   fat[b] = 0xFFFE; // 200 Free User Blocks (0..199)
+                    for (int b = 200; b <= 240; ++b) fat[b] = 0xFFFC; // Reserved system blocks (200..240)
+                    for (int b = 241; b <= 253; ++b) fat[b] = (b == 241) ? 0xFFFA : (uint16_t)(b - 1); // Directory chain
                     fat[254] = 0xFFFC; // FAT system block
                     fat[255] = 0xFFFC; // Root system block
 

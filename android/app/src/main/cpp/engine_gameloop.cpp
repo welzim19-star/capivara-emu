@@ -196,8 +196,15 @@ void GameLoop() {
                     ok = core.serialize(data, size);
                     if (ok) {
                         FILE* f = fopen(g_pendingSavePath.c_str(), "wb");
-                        if (f) { fwrite(data, 1, size, f); fclose(f); }
-                        else   { ok = false; }
+                        if (f) { 
+                            size_t written = fwrite(data, 1, size, f); 
+                            fflush(f);
+                            fsync(fileno(f));
+                            fclose(f); 
+                            ok = (written == size);
+                        } else { 
+                            ok = false; 
+                        }
                     }
                     free(data);
                 }
@@ -205,7 +212,7 @@ void GameLoop() {
                 g_pendingSavePath = "";
                 g_stateOpPending  = false;
                 g_stateOpCv.notify_all();
-                LOGI("SaveState executed on GL thread: result=%d", ok);
+                LOGI("SaveState executed on GL thread: result=%d (size=%zu bytes)", ok, size);
             } else if (!g_pendingLoadPath.empty()) {
                 bool ok = false;
                 if (core.unserialize) {
@@ -216,9 +223,11 @@ void GameLoop() {
                         fseek(f, 0, SEEK_SET);
                         if (size > 0) {
                             void* data = malloc(size);
-                            fread(data, 1, size, f);
+                            size_t readBytes = fread(data, 1, size, f);
                             fclose(f);
-                            ok = core.unserialize(data, size);
+                            if (readBytes == size) {
+                                ok = core.unserialize(data, size);
+                            }
                             free(data);
                         } else {
                             fclose(f);
