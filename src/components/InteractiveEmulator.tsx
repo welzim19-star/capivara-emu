@@ -234,8 +234,8 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
 
   const handleCommitSaveState = async (slot: number, hash: string) => {
     try {
-      showToast("Salvando State na Memória...");
-      const result = await CapivaraEngine.saveState({ slot, hash });
+      showToast("Salvando State no Armazenamento...");
+      const result = await CapivaraEngine.saveState({ slot, hash, gameId: currentGame.id });
       
       // Update local storage metadata
       const storageKey = `capy_saves_${tenant.id}_${currentGame.id}`;
@@ -266,13 +266,13 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
   const handleCommitLoadState = async (slot: number, hash: string) => {
     try {
       showToast("Carregando State...");
-      await CapivaraEngine.loadState({ slot, hash });
+      await CapivaraEngine.loadState({ slot, hash, gameId: currentGame.id });
       showToast(`Slot ${slot} Carregado com Sucesso!`);
       setSaveManagerMode(null);
       setShowSettings(false);
       CapivaraEngine.resume();
     } catch (e) {
-      showToast("Erro ao carregar state (Hash Match Failed?)");
+      showToast("Erro ao carregar state (Arquivo não encontrado ou corrompido)");
     }
   };
 

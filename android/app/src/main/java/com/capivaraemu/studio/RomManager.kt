@@ -115,12 +115,24 @@ class RomManager(private val context: Context, private val udpLogger: (String) -
             }
 
             if (uriString.startsWith("http")) {
-                URL(uriString).openStream().use { input ->
-                    FileOutputStream(cacheFile).use { output ->
-                        input.copyTo(output)
-                    }
+                if (cacheFile.exists() && cacheFile.length() > 50000) {
+                    udpLogger("HTTP ROM already cached locally (${cacheFile.length()} bytes)! Offline boot ready.")
+                    return cacheFile.absolutePath
                 }
-                return cacheFile.absolutePath
+                try {
+                    URL(uriString).openStream().use { input ->
+                        FileOutputStream(cacheFile).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    return cacheFile.absolutePath
+                } catch (e: Exception) {
+                    udpLogger("Offline notice: Could not fetch HTTP stream (${e.message})")
+                    if (cacheFile.exists() && cacheFile.length() > 0) {
+                        return cacheFile.absolutePath
+                    }
+                    return null
+                }
             }
 
             // Zero-Copy FileDescriptor symlink fallback

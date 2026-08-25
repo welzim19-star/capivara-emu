@@ -406,9 +406,11 @@ class CapivaraPlugin : Plugin() {
     @PluginMethod
     fun saveState(call: PluginCall) {
         val slot = call.getInt("slot", 0) ?: 0
-        val hash = call.getString("hash", "default") ?: "default"
-        val safeHash = hash.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
-        val path = File(context.cacheDir, "save_${safeHash}_${slot}.state").absolutePath
+        val gameId = call.getString("gameId") ?: call.getString("hash", "default") ?: "default"
+        val safeGameId = gameId.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        val stateDir = File(context.filesDir, "savestates").apply { mkdirs() }
+        val stateFile = File(stateDir, "save_${safeGameId}_slot${slot}.state")
+        val path = stateFile.absolutePath
         val success = CapivaraEngine.saveState(path)
         
         if (!success) {
@@ -549,20 +551,29 @@ class CapivaraPlugin : Plugin() {
     @PluginMethod
     fun loadState(call: PluginCall) {
         val slot = call.getInt("slot", 0) ?: 0
-        val hash = call.getString("hash", "default") ?: "default"
-        val safeHash = hash.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        val gameId = call.getString("gameId") ?: call.getString("hash", "default") ?: "default"
+        val safeGameId = gameId.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        val stateDir = File(context.filesDir, "savestates").apply { mkdirs() }
         
-        var targetFile = File(context.cacheDir, "save_${safeHash}_${slot}.state")
+        var targetFile = File(stateDir, "save_${safeGameId}_slot${slot}.state")
         if (!targetFile.exists()) {
-            val legacyFile = File(context.cacheDir, "save_${slot}.state")
-            if (legacyFile.exists()) targetFile = legacyFile
+            val legacyCacheWithHash = File(context.cacheDir, "save_${safeGameId}_${slot}.state")
+            if (legacyCacheWithHash.exists()) targetFile = legacyCacheWithHash
+        }
+        if (!targetFile.exists()) {
+            val fallbackSlot = File(stateDir, "save_slot_${slot}.state")
+            if (fallbackSlot.exists()) targetFile = fallbackSlot
+        }
+        if (!targetFile.exists()) {
+            val legacyCache = File(context.cacheDir, "save_${slot}.state")
+            if (legacyCache.exists()) targetFile = legacyCache
         }
 
-        val success = CapivaraEngine.loadState(targetFile.absolutePath)
+        val success = if (targetFile.exists()) CapivaraEngine.loadState(targetFile.absolutePath) else false
         if (success) {
             call.resolve()
         } else {
-            call.reject("Failed to load state")
+            call.reject("Failed to load state: File not found or corrupted")
         }
     }
 
