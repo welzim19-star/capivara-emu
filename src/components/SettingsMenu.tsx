@@ -35,7 +35,7 @@ const CONSOLE_THEME: Record<string, { accent: string; accentDark: string; label:
   PS1_PCSX:               { accent: '#0EA5E9', accentDark: '#0369A1', label: 'PlayStation', icon: '🔵' },
   PS2_NETHERSX2:          { accent: '#4F46E5', accentDark: '#3730A3', label: 'PlayStation 2', icon: '🔷' },
   N64_MUPEN64PLUS:        { accent: '#22C55E', accentDark: '#15803D', label: 'Nintendo 64', icon: '🟩' },
-  MAME_2003PLUS:          { accent: '#DC2626', accentDark: '#991B1B', label: 'Arcade MAME', icon: '🕹️' },
+  DREAMCAST_FLYCAST:      { accent: '#F97316', accentDark: '#C2410C', label: 'Dreamcast', icon: '🌀' },
   NEOGEO_FBNEO:           { accent: '#EA580C', accentDark: '#9A3412', label: 'FinalBurn Neo', icon: '🔥' },
 };
 

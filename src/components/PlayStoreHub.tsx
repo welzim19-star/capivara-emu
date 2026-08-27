@@ -44,7 +44,7 @@ export const PlayStoreHub: React.FC<PlayStoreHubProps> = ({
     PS1_PCSX: true,
     PS2_NETHERSX2: true,
     N64_MUPEN64PLUS: true,
-    MAME_2003PLUS: true,
+    DREAMCAST_FLYCAST: true,
     NEOGEO_FBNEO: true
   });
 

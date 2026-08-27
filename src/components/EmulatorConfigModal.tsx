@@ -29,7 +29,7 @@ export const EmulatorConfigModal: React.FC<Props> = ({ tenant, initialConfig, on
   const isSNES = tenant.id === 'SNES_SNES9X';
   const isGBA = tenant.id === 'GBA_MGBA' || tenant.id === 'GBC_GAMBATTE';
   const isSega = tenant.id === 'GENESIS_GENPLUSGX' || tenant.id === 'MASTERSYSTEM_PICODRIVE';
-  const isArcade = tenant.id === 'MAME_2003PLUS' || tenant.id === 'NEOGEO_FBNEO';
+  const isArcade = tenant.id === 'NEOGEO_FBNEO';
 
   return (
     <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-[110] backdrop-blur-md">

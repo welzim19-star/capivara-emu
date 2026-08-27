@@ -89,8 +89,6 @@ export class GameScraperService {
       case 'N64_MUPEN64PLUS': return 'Nintendo - Nintendo 64';
       case 'GBA_MGBA': return 'Nintendo - Game Boy Advance';
       case 'MS3_TECTOY': return 'Sega - Master System - Mark III';
-      case 'MAME_2010':
-      case 'MAME_2003PLUS': return 'MAME';
       case 'NEOGEO_FBNEO': return 'FBNeo - Arcade Games';
       case 'DREAMCAST_FLYCAST': return 'Sega - Dreamcast';
       case 'PSP_PPSSPP': return 'Sony - PlayStation Portable';

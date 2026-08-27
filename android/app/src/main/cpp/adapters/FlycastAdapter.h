@@ -29,9 +29,11 @@ public:
 
     void setupControllerPorts(void (*set_controller_port_device)(unsigned, unsigned)) override {
         if (set_controller_port_device) {
-            LOGI_FLYCAST("Setting port 0 & 1 to RETRO_DEVICE_JOYPAD (Dreamcast 2-Player)");
+            LOGI_FLYCAST("Setting ports 0..3 to RETRO_DEVICE_JOYPAD (Dreamcast 4-Player + VMUs)");
             set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
             set_controller_port_device(1, RETRO_DEVICE_JOYPAD);
+            set_controller_port_device(2, RETRO_DEVICE_JOYPAD);
+            set_controller_port_device(3, RETRO_DEVICE_JOYPAD);
         }
     }
 
@@ -54,12 +56,16 @@ public:
         g_core_options["reicast_device_port1_slot2"]    = "VMU";
         g_core_options["reicast_device_port2_slot1"]    = "VMU";
         g_core_options["reicast_device_port2_slot2"]    = "VMU";
+        g_core_options["reicast_device_port3_slot1"]    = "VMU";
+        g_core_options["reicast_device_port4_slot1"]    = "VMU";
         g_core_options["reicast_per_content_vmus"]      = "disabled";
 
         g_core_options["flycast_device_port1_slot1"]    = "VMU";
         g_core_options["flycast_device_port1_slot2"]    = "VMU";
         g_core_options["flycast_device_port2_slot1"]    = "VMU";
         g_core_options["flycast_device_port2_slot2"]    = "VMU";
+        g_core_options["flycast_device_port3_slot1"]    = "VMU";
+        g_core_options["flycast_device_port4_slot1"]    = "VMU";
         g_core_options["flycast_per_content_vmus"]      = "disabled";
 
         // ── Direct Game Boot with NVRAM Flash ─────────────────────────────────
@@ -73,6 +79,14 @@ public:
             searchDirs.push_back(g_saveDir + "/dc");
             searchDirs.push_back(g_saveDir);
         }
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files/system/dc");
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files/system");
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files/system/bios/dc");
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files/system/bios");
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files/saves/dc");
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files/saves");
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files/dc");
+        searchDirs.push_back("/data/user/0/com.capivaraemu.studio/files");
 
         std::string foundBootPath = "";
         for (const auto& dir : searchDirs) {

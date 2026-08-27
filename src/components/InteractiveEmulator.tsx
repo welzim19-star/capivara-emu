@@ -305,8 +305,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
   // is3dConsole moved up to handle native buttons
   const is6ButtonGenesis = tenant.id === 'GENESIS_GENPLUSGX';
   const isSnesGba = ['SNES_SNES9X', 'GBA_MGBA'].includes(tenant.id);
-  const is8Bit2Button = ['MS3_TECTOY'].includes(tenant.id);
-  const isArcade = ['MAME_2003PLUS', 'NEOGEO_FBNEO'].includes(tenant.id);
+  const isArcade = tenant.id === 'NEOGEO_FBNEO';
 
   return (
     <div className="absolute inset-0 bg-transparent flex flex-col items-center justify-center overflow-hidden">
@@ -403,8 +402,8 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
             <MegaDriveGamepad onEmit={emitNativeButton} />
           ) : tenant.id === 'N64_MUPEN64PLUS' ? (
             <N64Gamepad onEmit={emitNativeButton} onAxis={emitAnalog} />
-          ) : tenant.id === 'MAME_2003PLUS' || tenant.id === 'NEOGEO_FBNEO' ? (
-            <ArcadeGamepad onEmit={emitNativeButton} sixButton={tenant.id === 'MAME_2003PLUS'} />
+          ) : tenant.id === 'NEOGEO_FBNEO' ? (
+            <ArcadeGamepad onEmit={emitNativeButton} sixButton={false} />
           ) : tenant.gamepadStyle ? (
             // Legacy fallback: consoles that still use the old tenant.gamepadStyle object
             <motion.div
@@ -430,12 +429,12 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
               )}
             </motion.div>
           ) : (
-            // No-pad consoles (PS1, PS2, PSP, MAME, etc.) — use StartSelect only
+            // No-pad consoles (PS1, PS2, PSP, etc.) — use StartSelect only
             <StartSelect onEmit={emitNativeButton} />
           )}
 
           {/* Start/Select center — only for consoles NOT using PolyGamepad (PolyGamepad includes own Start) */}
-          {!['SNES_SNES9X', 'GBA_MGBA', 'GENESIS_GENPLUSGX', 'N64_MUPEN64PLUS', 'MAME_2003PLUS', 'NEOGEO_FBNEO'].includes(tenant.id) && tenant.gamepadStyle && (
+          {!['SNES_SNES9X', 'GBA_MGBA', 'GENESIS_GENPLUSGX', 'N64_MUPEN64PLUS', 'NEOGEO_FBNEO'].includes(tenant.id) && tenant.gamepadStyle && (
             <motion.div
               drag={editMode}
               dragMomentum={false}
@@ -561,7 +560,7 @@ export const InteractiveEmulator: React.FC<Props> = ({ currentGame, tenant, onEx
               const adapter = new CapacitorEngineAdapter();
               await adapter.setConfig(config);
               
-              if (['MAME_2003PLUS', 'NEOGEO_FBNEO', 'MAME_2010'].includes(tenant.id)) {
+              if (tenant.id === 'NEOGEO_FBNEO') {
                 showToast("Configuração Injetada! Reiniciando Placa Arcade (Cold Reboot)...");
                 setShowSettings(false);
                 setTimeout(() => setRelaunchTrigger(prev => prev + 1), 500);
