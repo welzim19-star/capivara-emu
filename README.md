@@ -1,3 +1,7 @@
+<div align="right">
+  <strong>English</strong> | <a href="README.pt-BR.md">Português</a>
+</div>
+
 # Capivara EMU 🎮⚡
 
 [![Engine](https://img.shields.io/badge/Engine-C%2B%2B20%20%2F%20NDK%20r26-blue.svg)](https://developer.android.com/ndk)
@@ -69,7 +73,7 @@ flowchart TD
 
 ## 📊 Performance Benchmarks (Device: Snapdragon 8 Gen 2)
 
-| Core Emulado | Resolução Nativa | Frame Rate Médio | Frame Drop (%) | Latência de Input (JNI) |
+| Emulated Core | Native Resolution | Average Frame Rate | Frame Drop (%) | Input Latency (JNI) |
 | :--- | :---: | :---: | :---: | :---: |
 | **PlayStation 1 (DuckStation)** | 1080p (3x Upscale) | 60.0 FPS | 0.00% | < 4.2 ms |
 | **Nintendo 64 (Mupen64Plus)** | 1080p (Wide) | 60.0 FPS | 0.01% | < 3.8 ms |
