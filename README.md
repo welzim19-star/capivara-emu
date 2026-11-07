@@ -30,14 +30,14 @@ flowchart TD
     end
 
     subgraph JNI_BRIDGE["Galvanic Asymmetric Bridge"]
-        Bridge["JNI Native Invocation Layer\n(pthread dispatch, non-blocking)"]
+        Bridge["JNI Native Invocation Layer<br/>(pthread dispatch, non-blocking)"]
     end
 
     subgraph ENGINE_PLANE["Execution Plane (Hardware Native)"]
-        Core["Libretro Dynamic Core (.so)\n[PCSX / Mupen64 / Flycast / Play!]"]
-        EGL["EGL / GLES3 Context\n(SurfaceView Native Window)"]
+        Core["Libretro Dynamic Core (.so)<br/>[PCSX / Mupen64 / Flycast / Play!]"]
+        EGL["EGL / GLES3 Context<br/>(SurfaceView Native Window)"]
         Audio["OpenSLES / AAudio Ring Buffer"]
-        VMS["Sega VMS / FAT Filesystem Engine\n(In-Memory Struct & fsync Sync)"]
+        VMS["Sega VMS / FAT Filesystem Engine<br/>(In-Memory Struct & fsync Sync)"]
         
         Core --> EGL
         Core --> Audio
