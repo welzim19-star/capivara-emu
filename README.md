@@ -24,30 +24,30 @@ Traditional hybrid emulators fail on mobile due to thread contention: DOM events
 ```mermaid
 flowchart TD
     subgraph UI_PLANE["Control Plane (UI Thread)"]
-        UI["React 18 + Vite (Capacitor WebLayer)"]
-        State["Zustand State Store"]
-        BT["Bluetooth / OTG Input Mapper"]
+        UI["React 18 + Vite<br/>(Capacitor WebLayer)"]
+        State["Reactive State<br/>(Zustand Store)"]
+        BT["Input Mapper<br/>(Bluetooth / OTG)"]
         UI --> State
         UI --> BT
     end
 
     subgraph JNI_BRIDGE["Galvanic Asymmetric Bridge"]
-        Bridge["JNI Native Invocation Layer<br/>(pthread dispatch, non-blocking)"]
+        Bridge["JNI Native Invocation<br/>(Async pthread dispatch)"]
     end
 
     subgraph ENGINE_PLANE["Execution Plane (Hardware Native)"]
-        Core["Libretro Dynamic Core (.so)<br/>[PCSX / Mupen64 / Flycast / Play!]"]
-        EGL["EGL / GLES3 Context<br/>(SurfaceView Native Window)"]
-        Audio["OpenSLES / AAudio Ring Buffer"]
-        VMS["Sega VMS / FAT Filesystem Engine<br/>(In-Memory Struct & fsync Sync)"]
+        Core["Libretro Dynamic Cores<br/>(PCSX / Flycast / Mupen64)"]
+        EGL["EGL / GLES3 Context<br/>(Native SurfaceView)"]
+        Audio["OpenSLES / AAudio<br/>(Ring Buffer)"]
+        VMS["VMS Filesystem Engine<br/>(Dreamcast Binary FAT)"]
         
         Core --> EGL
         Core --> Audio
         Core --> VMS
     end
 
-    UI_PLANE -- "IPC Config & Commands" --> JNI_BRIDGE
-    JNI_BRIDGE -- "Zero-Copy Direct Buffers" --> ENGINE_PLANE
+    UI_PLANE -- "IPC Commands" --> JNI_BRIDGE
+    JNI_BRIDGE -- "Zero-Copy Buffers" --> ENGINE_PLANE
 ```
 
 ---

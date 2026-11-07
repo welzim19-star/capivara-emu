@@ -24,30 +24,30 @@ Emuladores híbridos tradicionais frequentemente apresentam instabilidade no And
 ```mermaid
 flowchart TD
     subgraph UI_PLANE["Plano de Controle (Thread de UI)"]
-        UI["React 18 + Vite (Camada Web Capacitor)"]
-        State["Gerenciador de Estado Zustand"]
-        BT["Mapeador de Entrada Bluetooth / OTG"]
+        UI["React 18 + Vite<br/>(Camada Web Capacitor)"]
+        State["Estado Reativo<br/>(Zustand Store)"]
+        BT["Mapeador de Entrada<br/>(Bluetooth / OTG)"]
         UI --> State
         UI --> BT
     end
 
     subgraph JNI_BRIDGE["Ponte Assimétrica Galvânica"]
-        Bridge["Camada de Invocação Nativa JNI\n(Despacho via pthread, não bloqueante)"]
+        Bridge["Invocação Nativa JNI<br/>(pthread assíncrono)"]
     end
 
     subgraph ENGINE_PLANE["Plano de Execução (Nativo de Hardware)"]
-        Core["Módulo Dinâmico Libretro (.so)\n[PCSX / Mupen64 / Flycast / Play!]"]
-        EGL["Contexto EGL / GLES3\n(Janela Nativa SurfaceView)"]
-        Audio["Buffer Circular OpenSLES / AAudio"]
-        VMS["Sistema de Arquivos Sega VMS / FAT\n(Estrutura em Memória e Sincronização fsync)"]
+        Core["Cores Libretro (.so)<br/>(PCSX / Flycast / Mupen64)"]
+        EGL["Contexto EGL / GLES3<br/>(SurfaceView Nativo)"]
+        Audio["Buffer OpenSLES / AAudio<br/>(Ring Buffer)"]
+        VMS["Sistema de Arquivos VMS<br/>(FAT Binário Dreamcast)"]
         
         Core --> EGL
         Core --> Audio
         Core --> VMS
     end
 
-    UI_PLANE -- "Comandos e Configurações IPC" --> JNI_BRIDGE
-    JNI_BRIDGE -- "Buffers Diretos Zero-Copy" --> ENGINE_PLANE
+    UI_PLANE -- "Comandos IPC" --> JNI_BRIDGE
+    JNI_BRIDGE -- "Buffers Zero-Copy" --> ENGINE_PLANE
 ```
 
 ---

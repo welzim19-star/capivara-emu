@@ -29,3 +29,4 @@ jobs:
 
       - name: Vite Production Build
         run: npm run build
+
