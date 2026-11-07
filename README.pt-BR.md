@@ -9,6 +9,8 @@
 [![Plataforma](https://img.shields.io/badge/Plataforma-Android%2014%20(API%2034)-green.svg)](https://developer.android.com)
 [![Libretro](https://img.shields.io/badge/API-Libretro%20ABI%20Nativa-red.svg)](https://www.libretro.com/)
 [![Licença](https://img.shields.io/badge/Licen%C3%A7a-GPLv3-orange.svg)](LICENSE)
+[![Última Versão](https://img.shields.io/github/v/release/welzim19-star/capivara-emu?label=Release&color=brightgreen&logo=android)](https://github.com/welzim19-star/capivara-emu/releases/latest)
+[![CI](https://github.com/welzim19-star/capivara-emu/actions/workflows/ci.yml/badge.svg)](https://github.com/welzim19-star/capivara-emu/actions/workflows/ci.yml)
 
 > **Motor de Emulação Retrô Multi-Sistemas de Alta Performance para Android.**  
 > Desenvolvido sobre uma arquitetura de **Isolamento Galvânico** robusta, desacoplando a interface reativa em TypeScript do pipeline de renderização nativo em C++ através de pontes JNI assíncronas.

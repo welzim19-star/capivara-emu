@@ -10,6 +10,7 @@
 [![Libretro](https://img.shields.io/badge/API-Libretro%20Native%20ABI-red.svg)](https://www.libretro.com/)
 [![License](https://img.shields.io/badge/License-GPLv3-orange.svg)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/welzim19-star/capivara-emu?label=Release&color=brightgreen&logo=android)](https://github.com/welzim19-star/capivara-emu/releases/latest)
+[![CI](https://github.com/welzim19-star/capivara-emu/actions/workflows/ci.yml/badge.svg)](https://github.com/welzim19-star/capivara-emu/actions/workflows/ci.yml)
 
 > **High-Performance Multi-System Retro Emulation Engine for Android.**  
 > Built upon a hardened **Galvanic Isolation Architecture** separating the Reactive TypeScript UI from the native C++ rendering pipeline via asynchronous JNI bridges.
