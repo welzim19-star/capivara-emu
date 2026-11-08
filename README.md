@@ -23,23 +23,23 @@ Traditional hybrid emulators fail on mobile due to thread contention: DOM events
 
 ```mermaid
 flowchart TD
-    subgraph UI_PLANE["Control Plane (UI Thread)"]
-        UI["React 18 + Vite<br/>(Capacitor WebLayer)"]
-        State["Reactive State<br/>(Zustand Store)"]
-        BT["Input Mapper<br/>(Bluetooth / OTG)"]
+    subgraph UI_PLANE["Control Plane (UI)"]
+        UI["React 18 + Vite"]
+        State["Reactive State Store"]
+        BT["Input Mapper"]
         UI --> State
         UI --> BT
     end
 
     subgraph JNI_BRIDGE["Galvanic Asymmetric Bridge"]
-        Bridge["JNI Native Invocation<br/>(Async pthread dispatch)"]
+        Bridge["JNI Native Invocation"]
     end
 
-    subgraph ENGINE_PLANE["Execution Plane (Hardware Native)"]
-        Core["Libretro Dynamic Cores<br/>(PCSX / Flycast / Mupen64)"]
-        EGL["EGL / GLES3 Context<br/>(Native SurfaceView)"]
-        Audio["OpenSLES / AAudio<br/>(Ring Buffer)"]
-        VMS["VMS Filesystem Engine<br/>(Dreamcast Binary FAT)"]
+    subgraph ENGINE_PLANE["Execution Plane (Native)"]
+        Core["Libretro Dynamic Cores"]
+        EGL["Native SurfaceView Context"]
+        Audio["OpenSLES Audio RingBuffer"]
+        VMS["Dreamcast VMS FAT Engine"]
         
         Core --> EGL
         Core --> Audio

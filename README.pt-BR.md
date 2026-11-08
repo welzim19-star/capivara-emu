@@ -23,23 +23,23 @@ Emuladores híbridos tradicionais frequentemente apresentam instabilidade no And
 
 ```mermaid
 flowchart TD
-    subgraph UI_PLANE["Plano de Controle (Thread de UI)"]
-        UI["React 18 + Vite<br/>(Camada Web Capacitor)"]
-        State["Estado Reativo<br/>(Zustand Store)"]
-        BT["Mapeador de Entrada<br/>(Bluetooth / OTG)"]
+    subgraph UI_PLANE["Plano de Controle (UI)"]
+        UI["React 18 + Vite"]
+        State["Estado Reativo Store"]
+        BT["Mapeador de Entrada"]
         UI --> State
         UI --> BT
     end
 
-    subgraph JNI_BRIDGE["Ponte Assimétrica Galvânica"]
-        Bridge["Invocação Nativa JNI<br/>(pthread assíncrono)"]
+    subgraph JNI_BRIDGE["Ponte Assimétrica JNI"]
+        Bridge["Invocação Nativa JNI"]
     end
 
-    subgraph ENGINE_PLANE["Plano de Execução (Nativo de Hardware)"]
-        Core["Cores Libretro (.so)<br/>(PCSX / Flycast / Mupen64)"]
-        EGL["Contexto EGL / GLES3<br/>(SurfaceView Nativo)"]
-        Audio["Buffer OpenSLES / AAudio<br/>(Ring Buffer)"]
-        VMS["Sistema de Arquivos VMS<br/>(FAT Binário Dreamcast)"]
+    subgraph ENGINE_PLANE["Plano de Execução (Nativo)"]
+        Core["Cores Libretro (.so)"]
+        EGL["Contexto SurfaceView"]
+        Audio["Buffer de Áudio OpenSLES"]
+        VMS["Sistema de Arquivos VMS FAT"]
         
         Core --> EGL
         Core --> Audio
