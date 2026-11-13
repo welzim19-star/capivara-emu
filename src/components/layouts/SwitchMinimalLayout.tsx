@@ -17,6 +17,8 @@ export interface SwitchMinimalLayoutProps {
   onToggleLayout: () => void;
   onRomsMapped: () => void;
   initialTenantId?: string | null;
+  lang?: 'pt' | 'en';
+  onToggleLang?: () => void;
 }
 
 export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({ 
@@ -27,7 +29,9 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
   onOpenAutofire,
   onToggleLayout,
   onRomsMapped,
-  initialTenantId
+  initialTenantId,
+  lang = 'pt',
+  onToggleLang
 }) => {
   const [selectedTenant, setSelectedTenant] = useState<TenantInfo | null>(() => {
     if (initialTenantId) return tenants.find(t => t.id === initialTenantId) || null;
@@ -167,6 +171,21 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
               <span className="text-[10px] font-bold text-cyan-400">1080P • 60 FPS</span>
             </div>
 
+            {/* Language Toggle */}
+            {onToggleLang && (
+              <button
+                id="btn-toggle-lang"
+                onClick={() => {
+                  sfx.playSelect();
+                  onToggleLang();
+                }}
+                className="px-2.5 py-1 bg-zinc-800/90 hover:bg-amber-950 text-amber-400 border border-amber-500/30 hover:border-amber-400 rounded-lg text-[10px] font-bold shadow-xs active:scale-95 transition-all flex items-center space-x-1"
+                title={lang === 'pt' ? 'Mudar para Inglês (Switch to English)' : 'Switch to Portuguese (Mudar para Português)'}
+              >
+                <span>{lang === 'pt' ? '🇧🇷 PT' : '🇺🇸 EN'}</span>
+              </button>
+            )}
+
             {/* Layout Toggle */}
             <button 
               id="btn-toggle-layout"
@@ -195,7 +214,7 @@ export const SwitchMinimalLayout: React.FC<SwitchMinimalLayoutProps> = ({
             <div className="flex justify-between items-center mb-4 shrink-0">
               <div className="flex items-center space-x-3">
                 <h2 className="text-xs font-black uppercase tracking-widest text-zinc-400">
-                  Emuladores Disponíveis <span className="text-cyan-400 text-sm">({tenants.length || 0})</span>
+                  {lang === 'en' ? 'Available Emulators' : 'Emuladores Disponíveis'} <span className="text-cyan-400 text-sm">({tenants.length || 0})</span>
                 </h2>
                 <div className="hidden sm:flex space-x-1.5">
                   <div className="w-2 h-2 rounded-full bg-cyan-500"></div>

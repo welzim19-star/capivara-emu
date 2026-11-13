@@ -1,3 +1,4 @@
+import { Lang, getStoredLang, setStoredLang, t } from './i18n';
 import React, { useState, useEffect, useCallback } from 'react';
 import { TENANTS } from './data/tenantsData';
 import { TenantInfo, GameItem } from './types';
@@ -22,6 +23,7 @@ export default function App() {
   const [currentGame, setCurrentGame] = useState<GameItem | null>(null);
   const [currentTenant, setCurrentTenant] = useState<TenantInfo | null>(null);
   const [lastActiveTenantId, setLastActiveTenantId] = useState<string | null>(null);
+  const [lang, setLang] = useState<Lang>(() => getStoredLang());
   const [isScraperOpen, setIsScraperOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -158,6 +160,14 @@ export default function App() {
     setTenantsState([...tenantsState]); 
   };
 
+  const toggleLang = () => {
+    const nextLang = lang === 'pt' ? 'en' : 'pt';
+    setLang(nextLang);
+    setStoredLang(nextLang);
+    setToastMessage(t('lang_switched', nextLang));
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
   const toggleLayout = () => {
     const newLayout = activeLayout === 'steamos' ? 'switch' : 'steamos';
     setActiveLayout(newLayout);
@@ -211,6 +221,8 @@ export default function App() {
           onOpenAutofire={handleOpenAutofire}
           onToggleLayout={toggleLayout}
           onRomsMapped={loadAllRoms}
+          lang={lang}
+          onToggleLang={toggleLang}
         />
       ) : (
         <SwitchMinimalLayout 
@@ -222,6 +234,8 @@ export default function App() {
           onOpenAutofire={handleOpenAutofire}
           onToggleLayout={toggleLayout}
           onRomsMapped={loadAllRoms}
+          lang={lang}
+          onToggleLang={toggleLang}
         />
       )}
 

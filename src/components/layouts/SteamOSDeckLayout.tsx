@@ -16,6 +16,8 @@ interface Props {
   onToggleLayout: () => void;
   onRomsMapped: () => void;
   initialTenantId?: string | null;
+  lang?: 'pt' | 'en';
+  onToggleLang?: () => void;
 }
 
 export const SteamOSDeckLayout: React.FC<Props> = ({ 
@@ -26,7 +28,9 @@ export const SteamOSDeckLayout: React.FC<Props> = ({
   onOpenAutofire,
   onToggleLayout,
   onRomsMapped,
-  initialTenantId
+  initialTenantId,
+  lang = 'pt',
+  onToggleLang
 }) => {
   const [selectedTenantIdx, setSelectedTenantIdx] = useState(() => {
     if (initialTenantId) {
@@ -103,6 +107,15 @@ export const SteamOSDeckLayout: React.FC<Props> = ({
                 </button>
               ))}
             </div>
+            {onToggleLang && (
+              <button
+                onClick={onToggleLang}
+                className="ml-1 bg-zinc-800 text-amber-400 border border-amber-500/30 px-2 py-1 rounded-xl text-[9px] font-mono whitespace-nowrap shrink-0 active:scale-95 transition-transform"
+                title={lang === 'pt' ? 'Mudar para Inglês' : 'Switch to Portuguese'}
+              >
+                {lang === 'pt' ? '🇧🇷 PT' : '🇺🇸 EN'}
+              </button>
+            )}
             <button 
               onClick={onToggleLayout}
               className="ml-1 bg-zinc-800 text-cyan-400 border border-cyan-500/30 px-2.5 py-1 rounded-xl text-[9px] font-mono whitespace-nowrap shrink-0 active:scale-95 transition-transform"
